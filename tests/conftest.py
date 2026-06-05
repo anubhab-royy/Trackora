@@ -1,61 +1,122 @@
-# Shared fixtures (in-memory DB)
-
 """
-Pytest fixtures shared across all GameTracker database tests.
+tests/conftest.py
 
-All tests use an in-memory SQLite database so:
-    - Tests are isolated from each other.
-    - Tests leave no files on disk.
-    - Tests run fast.
+Shared pytest fixtures for Phase 2 tests.
+No real DB.  No real psutil.  No real filesystem.
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-# Make sure 'database' package is importable from the project root
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 import pytest
 
-from database.database_manager import DatabaseManager
-from database.repositories.games_repository import GamesRepository
-from database.repositories.sessions_repository import SessionsRepository
-from database.repositories.settings_repository import SettingsRepository
-from database.repositories.active_sessions_repository import ActiveSessionsRepository
+from tracker.tracking_state import TrackedGame, TrackingState
+
+
+# ---------------------------------------------------------------------------
+# In-memory repository fakes
+# ---------------------------------------------------------------------------
+
+class FakeActiveSessionsRepo:
+    """Minimal in-memory stand-in for ActiveSessionsRepository."""
+
+    def __init__(self) -> None:
+        self._rows: dict[int, dict] = {}
+        self._next_id = 1
+
+    def create(self, game_id: int, process_id: int, start_time) -> int:
+        row_id = self._next_id
+        self._next_id += 1
+        self._rows[row_id] = {
+            "id": row_id,
+            "game_id": game_id,
+            "process_id": process_id,
+            "start_time": start_time,
+        }
+        return row_id
+
+    def delete(self, active_session_id: int) -> None:
+        self._rows.pop(active_session_id, None)
+
+    def get_all(self) -> list[dict]:
+        return list(self._rows.values())
+
+    # Test helpers
+    def count(self) -> int:
+        return len(self._rows)
+
+    def get(self, active_session_id: int) -> dict | None:
+        return self._rows.get(active_session_id)
+
+
+class FakeSessionsRepo:
+    """Minimal in-memory stand-in for SessionsRepository."""
+
+    def __init__(self) -> None:
+        self._rows: dict[int, dict] = {}
+        self._next_id = 1
+
+    def create(self, game_id: int, start_time, end_time, duration_seconds: int) -> int:
+        row_id = self._next_id
+        self._next_id += 1
+        self._rows[row_id] = {
+            "id": row_id,
+            "game_id": game_id,
+            "start_time": start_time,
+            "end_time": end_time,
+            "duration_seconds": duration_seconds,
+        }
+        return row_id
+
+    # Test helpers
+    def count(self) -> int:
+        return len(self._rows)
+
+    def all(self) -> list[dict]:
+        return list(self._rows.values())
+
+
+class FakeGamesRepo:
+    """Minimal in-memory stand-in for GamesRepository."""
+
+    def __init__(self) -> None:
+        self._last_played: dict[int, object] = {}
+
+    def update_last_played(self, game_id: int, played_at) -> None:
+        self._last_played[game_id] = played_at
+
+    # Test helper
+    def get_last_played(self, game_id: int):
+        return self._last_played.get(game_id)
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def fake_active_sessions_repo() -> FakeActiveSessionsRepo:
+    return FakeActiveSessionsRepo()
 
 
 @pytest.fixture
-def db_manager():
-    """Provide an initialized in-memory DatabaseManager for each test."""
-    manager = DatabaseManager(db_path=":memory:")
-    manager.initialize()
-    yield manager
-    manager.close()
+def fake_sessions_repo() -> FakeSessionsRepo:
+    return FakeSessionsRepo()
 
 
 @pytest.fixture
-def connection(db_manager):
-    """Provide the raw sqlite3 connection from an initialized DatabaseManager."""
-    return db_manager.connection
+def fake_games_repo() -> FakeGamesRepo:
+    return FakeGamesRepo()
 
 
 @pytest.fixture
-def games_repo(connection):
-    return GamesRepository(connection)
+def empty_state() -> TrackingState:
+    return TrackingState()
 
 
 @pytest.fixture
-def sessions_repo(connection):
-    return SessionsRepository(connection)
-
-
-@pytest.fixture
-def settings_repo(connection):
-    return SettingsRepository(connection)
-
-
-@pytest.fixture
-def active_sessions_repo(connection):
-    return ActiveSessionsRepository(connection)
+def state_with_games() -> TrackingState:
+    """TrackingState pre-loaded with two enabled tracked games."""
+    state = TrackingState()
+    state.add_tracked_game(TrackedGame(game_id=1, name="Witcher 3", process_name="witcher3.exe"))
+    state.add_tracked_game(TrackedGame(game_id=2, name="Hades", process_name="hades.exe"))
+    return state
