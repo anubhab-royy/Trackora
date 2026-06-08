@@ -1,0 +1,222 @@
+2026-06-09 03:48:46 [INFO   ] LoggingService | LoggingService initialized. Log file: /home/astra/Codebase/GitHub/gametracker-project/logs/game_tracker.log
+2026-06-09 03:48:57 [INFO   ] LoggingService | LoggingService initialized. Log file: /home/astra/Codebase/GitHub/gametracker-project/logs/game_tracker.log
+2026-06-09 03:49:38 [INFO   ] LoggingService | LoggingService initialized. Log file: /home/astra/Codebase/GitHub/gametracker-project/logs/game_tracker.log
+2026-06-09 03:49:38 [DEBUG  ] database.database_manager | PRAGMAs applied: WAL mode ON, foreign_keys ON.
+2026-06-09 03:49:38 [DEBUG  ] database.database_manager | Database schema created / verified successfully.
+2026-06-09 03:49:38 [INFO   ] database.database_manager | DatabaseManager initialized. Path: /home/astra/.gametracker/gametracker.db
+2026-06-09 03:49:38 [INFO   ] statistics.statistics_service | StatisticsService initialised.
+2026-06-09 03:49:38 [INFO   ] tracker.recovery_manager | RecoveryManager: Starting session recovery scan.
+2026-06-09 03:49:38 [INFO   ] tracker.recovery_manager | RecoveryManager: No orphaned sessions found. Clean startup confirmed.
+2026-06-09 03:49:38 [INFO   ] ui.themes.theme_manager | ThemeManager initialised.
+2026-06-09 03:49:38 [INFO   ] ui.dashboard.dashboard_controller | DashboardController initialised.
+2026-06-09 03:49:38 [DEBUG  ] ui.widgets.stat_card | StatCard created: label=Total Playtime
+2026-06-09 03:49:38 [DEBUG  ] ui.widgets.stat_card | StatCard created: label=Today
+2026-06-09 03:49:38 [DEBUG  ] ui.widgets.stat_card | StatCard created: label=This Week
+2026-06-09 03:49:38 [DEBUG  ] ui.widgets.stat_card | StatCard created: label=This Month
+2026-06-09 03:49:38 [DEBUG  ] ui.widgets.game_card | GameCard created: game=No games tracked yet
+2026-06-09 03:49:38 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: auto-refresh timer started (60000ms).
+2026-06-09 03:49:38 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:49:38 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:49:38 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:49:38 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:49:38 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:49:38 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:49:38 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:49:38 [INFO   ] ui.widgets.charts_controller | ChartsController initialised.
+2026-06-09 03:49:38 [INFO   ] services.tray_service | TrayService: icon displayed.
+2026-06-09 03:49:38 [INFO   ] ui.main_window | MainWindow initialised.
+2026-06-09 03:49:38 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:49:38 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:49:38 [INFO   ] ui.themes.theme_manager | Applied theme: dark
+2026-06-09 03:49:38 [DEBUG  ] tracker.process_monitor | ProcessMonitor thread entering poll loop
+2026-06-09 03:49:38 [INFO   ] tracker.process_monitor | ProcessMonitor started (poll_interval=5.0s)
+2026-06-09 03:49:38 [INFO   ] __main__ | GameTracker started — database: /home/astra/.gametracker/gametracker.db
+2026-06-09 03:51:11 [INFO   ] LoggingService | LoggingService initialized. Log file: /home/astra/Codebase/GitHub/gametracker-project/logs/game_tracker.log
+2026-06-09 03:51:12 [DEBUG  ] database.database_manager | PRAGMAs applied: WAL mode ON, foreign_keys ON.
+2026-06-09 03:51:12 [DEBUG  ] database.database_manager | Database schema created / verified successfully.
+2026-06-09 03:51:12 [INFO   ] database.database_manager | DatabaseManager initialized. Path: /home/astra/.gametracker/gametracker.db
+2026-06-09 03:51:12 [INFO   ] statistics.statistics_service | StatisticsService initialised.
+2026-06-09 03:51:12 [INFO   ] tracker.recovery_manager | RecoveryManager: Starting session recovery scan.
+2026-06-09 03:51:12 [INFO   ] tracker.recovery_manager | RecoveryManager: No orphaned sessions found. Clean startup confirmed.
+2026-06-09 03:51:12 [INFO   ] ui.themes.theme_manager | ThemeManager initialised.
+2026-06-09 03:51:12 [INFO   ] ui.dashboard.dashboard_controller | DashboardController initialised.
+2026-06-09 03:51:12 [DEBUG  ] ui.widgets.stat_card | StatCard created: label=Total Playtime
+2026-06-09 03:51:12 [DEBUG  ] ui.widgets.stat_card | StatCard created: label=Today
+2026-06-09 03:51:12 [DEBUG  ] ui.widgets.stat_card | StatCard created: label=This Week
+2026-06-09 03:51:12 [DEBUG  ] ui.widgets.stat_card | StatCard created: label=This Month
+2026-06-09 03:51:12 [DEBUG  ] ui.widgets.game_card | GameCard created: game=No games tracked yet
+2026-06-09 03:51:12 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: auto-refresh timer started (60000ms).
+2026-06-09 03:51:12 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:51:12 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:51:12 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:51:12 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:51:12 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:51:12 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:51:12 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:51:12 [INFO   ] ui.widgets.charts_controller | ChartsController initialised.
+2026-06-09 03:51:12 [INFO   ] services.tray_service | TrayService: icon displayed.
+2026-06-09 03:51:12 [INFO   ] ui.main_window | MainWindow initialised.
+2026-06-09 03:51:12 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:51:12 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:51:12 [INFO   ] ui.themes.theme_manager | Applied theme: dark
+2026-06-09 03:51:12 [DEBUG  ] tracker.process_monitor | ProcessMonitor thread entering poll loop
+2026-06-09 03:51:12 [INFO   ] tracker.process_monitor | ProcessMonitor started (poll_interval=5.0s)
+2026-06-09 03:51:12 [INFO   ] __main__ | GameTracker started — database: /home/astra/.gametracker/gametracker.db
+2026-06-09 03:51:17 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:51:17 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:51:17 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:51:17 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:51:17 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:51:17 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:51:17 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:51:21 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:51:21 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:51:21 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:51:21 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:51:21 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:51:21 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:51:21 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:51:21 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:51:21 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:51:31 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:51:31 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:51:41 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:51:41 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:51:51 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:51:51 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:52:01 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:52:01 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:52:11 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:52:11 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:52:11 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:52:11 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:52:11 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:52:11 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:52:11 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:52:11 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:52:11 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:52:21 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:52:21 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:52:21 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:52:21 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:52:21 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:52:21 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:52:21 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:52:21 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:52:21 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:52:26 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:52:26 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:52:26 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:52:26 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:52:26 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:52:26 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:52:26 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:52:31 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:52:31 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:52:31 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:52:31 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:52:31 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:52:31 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:52:31 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:52:31 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:52:31 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:52:36 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:52:36 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:52:36 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:52:36 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:52:36 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:52:36 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:52:36 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:52:37 [INFO   ] ui.themes.theme_manager | Applied theme: light
+2026-06-09 03:52:39 [INFO   ] ui.themes.theme_manager | Applied theme: dark
+2026-06-09 03:52:41 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:52:41 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:52:41 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:52:41 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:52:41 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:52:41 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:52:41 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:52:41 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:52:41 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:52:43 [INFO   ] ui.themes.theme_manager | Applied theme: light
+2026-06-09 03:52:44 [INFO   ] ui.themes.theme_manager | Applied theme: dark
+2026-06-09 03:52:45 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:52:45 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:52:45 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:52:45 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:52:45 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:52:45 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:52:45 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:52:46 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:52:46 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:52:46 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:52:46 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:52:46 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:52:46 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:52:46 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:52:47 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:52:47 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:52:47 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:52:47 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:52:47 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:52:47 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:52:47 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:52:51 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:52:51 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:52:51 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:52:51 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:52:51 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:52:51 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:52:51 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:52:51 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:52:51 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:52:56 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:52:56 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:52:56 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:52:56 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:52:56 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:52:56 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:52:56 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:53:01 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:53:01 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:53:01 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:53:01 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:53:01 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:53:01 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:53:01 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:53:01 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:53:01 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:53:06 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:53:06 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:53:06 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:53:06 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:53:06 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:53:06 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:53:06 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:53:11 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:53:11 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:53:11 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:53:11 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:53:11 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:53:11 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:53:11 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:53:11 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:53:11 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:53:11 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:53:11 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:53:11 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:53:11 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:53:11 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:53:11 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:53:11 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:53:21 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:53:21 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games
+2026-06-09 03:53:21 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: refreshing data.
+2026-06-09 03:53:21 [INFO   ] statistics.playtime_calculator | Calculating lifetime statistics.
+2026-06-09 03:53:21 [INFO   ] statistics.playtime_calculator | Calculating daily statistics for 2026-06-09.
+2026-06-09 03:53:21 [INFO   ] statistics.playtime_calculator | Calculating weekly statistics for week 2026-06-08–2026-06-14.
+2026-06-09 03:53:21 [INFO   ] statistics.playtime_calculator | Calculating monthly statistics for 2026-06.
+2026-06-09 03:53:21 [DEBUG  ] ui.dashboard.dashboard_controller | Dashboard data loaded: total=0m today=0m week=0m month=0m most_played=No games tracked yet
+2026-06-09 03:53:21 [DEBUG  ] ui.dashboard.dashboard_widget | DashboardWidget: UI updated.
+2026-06-09 03:53:31 [DEBUG  ] tracker.tracking_state | Process name index rebuilt: 0 entries
+2026-06-09 03:53:31 [INFO   ] tracker.process_monitor | Tracked games reloaded: 0 games

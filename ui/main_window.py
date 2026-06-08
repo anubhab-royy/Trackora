@@ -1,0 +1,268 @@
+"""
+MainWindow — Phase 10
+Application-level window that assembles all UI views into a single
+QMainWindow with sidebar navigation.
+
+Architecture:
+  - Creates views and controllers, wires them together.
+  - Hosts them in a QStackedWidget switched by the sidebar.
+  - Integrates TrayService for minimize-to-tray.
+  - Provides theme toggle and export actions.
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Optional
+
+from PyQt6.QtCore import QTimer
+from PyQt6.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QMessageBox,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+from PyQt6.QtGui import QAction, QKeySequence
+
+from database.repositories import SettingsRepository
+from services.export_service import ExportService
+from services.game_service import GameService
+from services.session_history_service import SessionHistoryService
+from services.tray_service import TrayService
+from statistics.statistics_service import StatisticsService
+from ui.dashboard.dashboard_controller import DashboardController
+from ui.dashboard.dashboard_widget import DashboardWidget
+from ui.games.games_controller import GamesController
+from ui.games.games_view import GamesView
+from ui.history.history_controller import HistoryController
+from ui.history.history_view import HistoryView
+from ui.themes.theme_manager import Theme, ThemeManager
+from ui.widgets.charts_controller import ChartsController
+from ui.widgets.charts_view import ChartsView
+
+logger = logging.getLogger(__name__)
+
+_NAV_ITEMS = ["Dashboard", "Games", "History", "Charts"]
+
+
+class MainWindow(QMainWindow):
+    """
+    Main application window with sidebar navigation.
+
+    Owns all views and controllers.  Exposes methods
+    for tray service and menu actions.
+    """
+
+    def __init__(
+        self,
+        game_service: GameService,
+        session_history_service: SessionHistoryService,
+        statistics_service: StatisticsService,
+        export_service: ExportService,
+        theme_manager: ThemeManager,
+        settings_repo: SettingsRepository,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self._game_service = game_service
+        self._session_history_service = session_history_service
+        self._statistics_service = statistics_service
+        self._export_service = export_service
+        self._theme_manager = theme_manager
+        self._settings_repo = settings_repo
+
+        self.setWindowTitle("GameTracker")
+        self.setMinimumSize(1000, 650)
+        self.resize(1200, 750)
+
+        self._setup_ui()
+        self._build_views()
+        self._connect_nav()
+        self._create_menu_actions()
+        self._setup_tray()
+        self._setup_auto_refresh()
+
+        logger.info("MainWindow initialised.")
+
+    # ------------------------------------------------------------------
+    # UI setup
+    # ------------------------------------------------------------------
+
+    def _setup_ui(self) -> None:
+        central = QWidget()
+        self.setCentralWidget(central)
+
+        root = QHBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        sidebar = QWidget()
+        sidebar.setObjectName("Sidebar")
+        sidebar.setFixedWidth(200)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setSpacing(0)
+
+        title = QLabel("GameTracker")
+        title.setObjectName("AppTitle")
+        sidebar_layout.addWidget(title)
+
+        self._nav = QListWidget()
+        self._nav.setObjectName("NavList")
+        for name in _NAV_ITEMS:
+            self._nav.addItem(QListWidgetItem(name))
+
+        sidebar_layout.addWidget(self._nav, stretch=1)
+
+        self._content = QStackedWidget()
+        self._content.setObjectName("ContentArea")
+
+        root.addWidget(sidebar)
+        root.addWidget(self._content, stretch=1)
+
+    def _build_views(self) -> None:
+        dashboard_controller = DashboardController(self._statistics_service)
+        dashboard_view = DashboardWidget(dashboard_controller, self)
+        self._content.addWidget(dashboard_view)
+
+        games_view = GamesView(self)
+        GamesController(games_view, self._game_service)
+        self._content.addWidget(games_view)
+
+        history_view = HistoryView(self)
+        HistoryController(history_view, self._session_history_service)
+        self._content.addWidget(history_view)
+
+        charts_view = ChartsView(self)
+        ChartsController(charts_view, self._statistics_service)
+        self._content.addWidget(charts_view)
+
+    def _connect_nav(self) -> None:
+        self._nav.currentRowChanged.connect(self._content.setCurrentIndex)
+        self._nav.setCurrentRow(0)
+
+    def _create_menu_actions(self) -> None:
+        menu = self.menuBar()
+        file_menu = menu.addMenu("&File")
+
+        csv_action = QAction("Export CSV...", self)
+        csv_action.setShortcut(QKeySequence("Ctrl+E"))
+        csv_action.triggered.connect(self.export_csv)
+        file_menu.addAction(csv_action)
+
+        json_action = QAction("Backup JSON...", self)
+        json_action.setShortcut(QKeySequence("Ctrl+B"))
+        json_action.triggered.connect(self.export_json)
+        file_menu.addAction(json_action)
+
+        file_menu.addSeparator()
+
+        quit_action = QAction("Quit", self)
+        quit_action.setShortcut(QKeySequence("Ctrl+Q"))
+        quit_action.triggered.connect(self._quit_app)
+        file_menu.addAction(quit_action)
+
+        view_menu = menu.addMenu("&View")
+
+        theme_action = QAction("Toggle Theme", self)
+        theme_action.setShortcut(QKeySequence("Ctrl+T"))
+        theme_action.triggered.connect(self.toggle_theme)
+        view_menu.addAction(theme_action)
+
+    def _setup_tray(self) -> None:
+        self._tray = TrayService(self, self)
+        self._tray.show_requested.connect(self._show_from_tray)
+        self._tray.dashboard_requested.connect(lambda: self.switch_to("Dashboard"))
+        self._tray.history_requested.connect(lambda: self.switch_to("History"))
+        self._tray.quit_requested.connect(self._quit_app)
+        self._tray.show()
+
+    def _setup_auto_refresh(self) -> None:
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.timeout.connect(self._refresh_current_view)
+        self._refresh_timer.start(5000)
+
+    # ------------------------------------------------------------------
+    # Slots
+    # ------------------------------------------------------------------
+
+    def closeEvent(self, event):  # type: ignore[override]
+        event.ignore()
+        self.hide()
+
+    def _show_from_tray(self) -> None:
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _quit_app(self) -> None:
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
+
+    def _refresh_current_view(self) -> None:
+        widget = self._content.currentWidget()
+        if isinstance(widget, DashboardWidget):
+            widget.refresh()
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def switch_to(self, page: str) -> None:
+        try:
+            idx = _NAV_ITEMS.index(page)
+            self._nav.setCurrentRow(idx)
+        except ValueError:
+            logger.warning("Unknown page: %s", page)
+
+    def export_csv(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Sessions to CSV",
+            str(Path.home() / "sessions.csv"),
+            "CSV Files (*.csv)",
+        )
+        if not path:
+            return
+        ok = self._export_service.export_sessions_csv(Path(path))
+        if ok:
+            QMessageBox.information(
+                self, "Export", f"Sessions exported to:\n{path}"
+            )
+        else:
+            QMessageBox.warning(
+                self, "Export", "Export failed. See logs for details."
+            )
+
+    def export_json(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Backup to JSON",
+            str(Path.home() / "gametracker_backup.json"),
+            "JSON Files (*.json)",
+        )
+        if not path:
+            return
+        ok = self._export_service.export_all_json(Path(path))
+        if ok:
+            QMessageBox.information(
+                self, "Backup", f"Backup saved to:\n{path}"
+            )
+        else:
+            QMessageBox.warning(
+                self, "Backup", "Backup failed. See logs for details."
+            )
+
+    def toggle_theme(self) -> None:
+        current = self._theme_manager.current_theme
+        new_theme = Theme.LIGHT if current == Theme.DARK else Theme.DARK
+        app = QApplication.instance()
+        if app is not None:
+            self._theme_manager.apply_theme(app, new_theme)
