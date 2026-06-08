@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from database.repositories.sessions_repository import SessionView
+from database.models import SessionView
 from services.session_history_service import (
     SessionHistoryQuery,
     SessionHistoryResult,

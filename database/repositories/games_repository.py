@@ -158,6 +158,19 @@ class GamesRepository:
         )
         return cursor.fetchone() is not None
 
+    def get_by_executable_path(self, executable_path: str) -> Game | None:
+        """
+        Return the Game with the given executable path, or None.
+        Used by the service layer for duplicate checking (AC-001).
+        """
+        cursor = self._conn.cursor()
+        cursor.execute(
+            "SELECT * FROM games WHERE executable_path = ? LIMIT 1;",
+            (executable_path,),
+        )
+        row = cursor.fetchone()
+        return _row_to_game(row) if row else None
+
     # ------------------------------------------------------------------
     # Update
     # ------------------------------------------------------------------

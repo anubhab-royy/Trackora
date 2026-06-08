@@ -7,9 +7,8 @@ No SQL. No UI. Pure service logic.
 from __future__ import annotations
 
 import logging
-import ntpath
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Optional
 
 from database.models import Game
@@ -228,4 +227,4 @@ class GameService:
     @staticmethod
     def _extract_process_name(executable_path: str) -> str:
         """Extract process name (filename) from an executable path."""
-        return ntpath.basename(executable_path)
+        return PureWindowsPath(executable_path).name

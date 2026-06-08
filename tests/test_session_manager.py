@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from database.models import ActiveSession as DbActiveSession
 from tracker.session_manager import SessionManager
 from tracker.tracking_state import ActiveSession, TrackedGame, TrackingState
 
@@ -157,9 +158,11 @@ class TestEndSession:
         _add_game(state)
         # Manually inject an active session with a past start_time
         past = datetime.now() - timedelta(seconds=60)
-        active_id = active_repo.create(game_id=1, process_id=100, start_time=past)
+        db_active = active_repo.start_session(
+            DbActiveSession(game_id=1, process_id=100, start_time=past)
+        )
         state.active_sessions[1] = ActiveSession(
-            active_session_id=active_id,
+            active_session_id=db_active.id,
             game_id=1,
             game_name="Hades",
             process_id=100,

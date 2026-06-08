@@ -12,48 +12,48 @@ Validates that:
 import pytest
 from unittest.mock import MagicMock
 
+from services.formatting import format_duration
 from ui.dashboard.dashboard_controller import (
     DashboardController,
     DashboardData,
-    _format_duration,
 )
 
 
 # ---------------------------------------------------------------------------
-# _format_duration unit tests
+# format_duration unit tests
 # ---------------------------------------------------------------------------
 
 class TestFormatDuration:
     def test_zero_seconds(self):
-        assert _format_duration(0) == "0m"
+        assert format_duration(0) == "0m"
 
     def test_negative_seconds(self):
-        assert _format_duration(-100) == "0m"
+        assert format_duration(-100) == "0m"
 
     def test_minutes_only(self):
-        assert _format_duration(1800) == "30m"
+        assert format_duration(1800) == "30m"
 
     def test_one_hour_exactly(self):
-        assert _format_duration(3600) == "1h 0m"
+        assert format_duration(3600) == "1h 0m"
 
     def test_hours_and_minutes(self):
-        assert _format_duration(5400) == "1h 30m"
+        assert format_duration(5400) == "1h 30m"
 
     def test_large_value(self):
         # 142h 30m = 512_200 seconds? Let's verify: 142*3600 + 30*60 = 511200+1800=513000
-        assert _format_duration(513_000) == "142h 30m"
+        assert format_duration(513_000) == "142h 30m"
 
     def test_only_minutes_no_hours(self):
-        assert _format_duration(59 * 60) == "59m"
+        assert format_duration(59 * 60) == "59m"
 
     def test_one_second(self):
-        assert _format_duration(1) == "0m"
+        assert format_duration(1) == "0m"
 
     def test_one_minute(self):
-        assert _format_duration(60) == "1m"
+        assert format_duration(60) == "1m"
 
     def test_59_minutes_59_seconds(self):
-        assert _format_duration(3599) == "59m"
+        assert format_duration(3599) == "59m"
 
 
 # ---------------------------------------------------------------------------
@@ -65,14 +65,14 @@ def _make_service(
     daily_seconds: int = 0,
     weekly_seconds: int = 0,
     monthly_seconds: int = 0,
-    most_played: dict | None = None,
+    most_played: MagicMock | None = None,
 ) -> MagicMock:
     """Build a mock StatisticsService with configurable return values."""
     svc = MagicMock()
-    svc.get_lifetime_stats.return_value = {"total_seconds": lifetime_seconds}
-    svc.get_daily_stats.return_value = {"total_seconds": daily_seconds}
-    svc.get_weekly_stats.return_value = {"total_seconds": weekly_seconds}
-    svc.get_monthly_stats.return_value = {"total_seconds": monthly_seconds}
+    svc.get_lifetime_stats.return_value = MagicMock(total_seconds=lifetime_seconds)
+    svc.get_daily_stats.return_value = MagicMock(total_seconds=daily_seconds)
+    svc.get_weekly_stats.return_value = MagicMock(total_seconds=weekly_seconds)
+    svc.get_monthly_stats.return_value = MagicMock(total_seconds=monthly_seconds)
     svc.get_most_played_game.return_value = most_played
     return svc
 
@@ -119,11 +119,10 @@ class TestDashboardController:
         assert data.month_playtime == "0m"
 
     def test_most_played_game_populated(self):
-        most_played = {
-            "name": "Cyberpunk 2077",
-            "total_seconds": 3_600 * 50,  # 50h 0m
-            "icon_path": "",
-        }
+        most_played = MagicMock()
+        most_played.name = "Cyberpunk 2077"
+        most_played.total_seconds = 3_600 * 50  # 50h 0m
+        most_played.icon_path = ""
         svc = _make_service(most_played=most_played)
         ctrl = DashboardController(svc)
         data = ctrl.load_dashboard_data()
@@ -138,22 +137,20 @@ class TestDashboardController:
         assert data.most_played_game_hours == "—"
 
     def test_most_played_game_icon_path_propagated(self):
-        most_played = {
-            "name": "Half-Life 2",
-            "total_seconds": 3600,
-            "icon_path": "/path/to/icon.png",
-        }
+        most_played = MagicMock()
+        most_played.name = "Half-Life 2"
+        most_played.total_seconds = 3600
+        most_played.icon_path = "/path/to/icon.png"
         svc = _make_service(most_played=most_played)
         ctrl = DashboardController(svc)
         data = ctrl.load_dashboard_data()
         assert data.most_played_game_icon == "/path/to/icon.png"
 
     def test_most_played_game_missing_icon_path_defaults_empty(self):
-        most_played = {
-            "name": "Doom",
-            "total_seconds": 1800,
-            # no icon_path key
-        }
+        most_played = MagicMock()
+        most_played.name = "Doom"
+        most_played.total_seconds = 1800
+        most_played.icon_path = ""
         svc = _make_service(most_played=most_played)
         ctrl = DashboardController(svc)
         data = ctrl.load_dashboard_data()

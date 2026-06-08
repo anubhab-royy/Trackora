@@ -15,29 +15,11 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from dataclasses import dataclass
 from datetime import UTC, datetime, date, timedelta
 
-from database.models.session import Session
+from database.models import Session, SessionView
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class SessionView:
-    """
-    A session row enriched with the game name via JOIN.
-
-    Returned by query_sessions() for display in the history UI.
-    """
-
-    id: int
-    game_id: int
-    game_name: str
-    start_time: datetime
-    end_time: datetime
-    duration_seconds: int
-    created_at: datetime
 
 
 def _row_to_session(row: sqlite3.Row) -> Session:

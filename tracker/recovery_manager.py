@@ -286,8 +286,8 @@ class RecoveryManager:
                 duration_seconds=duration_seconds,
                 created_at=datetime.now(tz=timezone.utc),
             )
-            session_id: int = self._sessions_repo.create(session)
-            return session_id
+            saved = self._sessions_repo.add(session)
+            return saved.id
         except Exception as exc:
             logger.error(
                 "RecoveryManager: Failed to save recovered session "
@@ -306,7 +306,7 @@ class RecoveryManager:
             active_session_id: The id of the active_session to remove.
         """
         try:
-            self._active_sessions_repo.delete(active_session_id)
+            self._active_sessions_repo.end_session(active_session_id)
         except Exception as exc:
             logger.error(
                 "RecoveryManager: Failed to delete active_session id=%d. "

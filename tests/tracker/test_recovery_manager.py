@@ -52,18 +52,18 @@ def make_active_session(
 
 def make_repos(
     active_sessions: Optional[list[ActiveSession]] = None,
-    create_returns: int = 99,
+    add_returns_id: int = 99,
 ) -> tuple[MagicMock, MagicMock]:
     """
     Returns (active_sessions_repo_mock, sessions_repo_mock).
     active_sessions_repo.get_all() returns `active_sessions`.
-    sessions_repo.create() returns `create_returns`.
+    sessions_repo.add().id returns `add_returns_id`.
     """
     active_repo = MagicMock()
     active_repo.get_all.return_value = active_sessions or []
 
     sessions_repo = MagicMock()
-    sessions_repo.create.return_value = create_returns
+    sessions_repo.add.return_value.id = add_returns_id
 
     return active_repo, sessions_repo
 
@@ -92,7 +92,7 @@ class TestCleanStartup:
 
         manager.recover()
 
-        sessions_repo.create.assert_not_called()
+        sessions_repo.add.assert_not_called()
 
     def test_no_orphans_does_not_delete_anything(self):
         active_repo, sessions_repo = make_repos(active_sessions=[])
@@ -100,7 +100,7 @@ class TestCleanStartup:
 
         manager.recover()
 
-        active_repo.delete.assert_not_called()
+        active_repo.end_session.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +114,7 @@ class TestSingleSessionRecovery:
         orphan = make_active_session(id=1, game_id=5, start_time=start)
         active_repo, sessions_repo = make_repos(
             active_sessions=[orphan],
-            create_returns=42,
+            add_returns_id=42,
         )
         manager = RecoveryManager(active_repo, sessions_repo)
 
@@ -151,7 +151,7 @@ class TestSingleSessionRecovery:
 
         manager.recover()
 
-        active_repo.delete.assert_called_once_with(7)
+        active_repo.end_session.assert_called_once_with(7)
 
     def test_recover_single_session_correct_game_id_saved(self):
         orphan = make_active_session(id=1, game_id=999)
@@ -160,7 +160,7 @@ class TestSingleSessionRecovery:
 
         manager.recover()
 
-        created_session: Session = sessions_repo.create.call_args[0][0]
+        created_session: Session = sessions_repo.add.call_args[0][0]
         assert created_session.game_id == 999
 
     def test_recover_single_session_start_time_preserved(self):
@@ -171,7 +171,7 @@ class TestSingleSessionRecovery:
 
         manager.recover()
 
-        created_session: Session = sessions_repo.create.call_args[0][0]
+        created_session: Session = sessions_repo.add.call_args[0][0]
         assert created_session.start_time == start
 
     def test_recover_single_session_duration_stored_correctly(self):
@@ -182,7 +182,7 @@ class TestSingleSessionRecovery:
 
         manager.recover()
 
-        created_session: Session = sessions_repo.create.call_args[0][0]
+        created_session: Session = sessions_repo.add.call_args[0][0]
         # Duration should be approximately 3600 seconds
         assert abs(created_session.duration_seconds - 3600) < 5
 
@@ -200,7 +200,7 @@ class TestMultipleSessionsRecovery:
             make_active_session(id=3, game_id=30, start_time=now - timedelta(minutes=30)),
         ]
         active_repo, sessions_repo = make_repos(active_sessions=orphans)
-        sessions_repo.create.side_effect = [101, 102, 103]
+        sessions_repo.add.side_effect = [MagicMock(id=101), MagicMock(id=102), MagicMock(id=103)]
         manager = RecoveryManager(active_repo, sessions_repo)
 
         result = manager.recover()
@@ -220,9 +220,9 @@ class TestMultipleSessionsRecovery:
 
         manager.recover()
 
-        assert active_repo.delete.call_count == 2
-        active_repo.delete.assert_any_call(1)
-        active_repo.delete.assert_any_call(2)
+        assert active_repo.end_session.call_count == 2
+        active_repo.end_session.assert_any_call(1)
+        active_repo.end_session.assert_any_call(2)
 
     def test_recover_multiple_sessions_correct_total_found(self):
         now = datetime.now(tz=timezone.utc)
@@ -256,7 +256,7 @@ class TestShortSessionDiscard:
 
         assert result.discarded_count == 1
         assert len(result.recovered_sessions) == 0
-        sessions_repo.create.assert_not_called()
+        sessions_repo.add.assert_not_called()
 
     def test_discarded_session_still_deleted_from_active_sessions(self):
         """Even discarded sessions must be cleaned from active_sessions."""
@@ -267,7 +267,7 @@ class TestShortSessionDiscard:
 
         manager.recover()
 
-        active_repo.delete.assert_called_once_with(5)
+        active_repo.end_session.assert_called_once_with(5)
 
     def test_session_exactly_at_minimum_duration_is_saved(self):
         """Session at exactly MINIMUM_SESSION_DURATION_SECONDS must be saved."""
@@ -292,14 +292,14 @@ class TestShortSessionDiscard:
             make_active_session(id=3, start_time=now - timedelta(minutes=30)), # valid
         ]
         active_repo, sessions_repo = make_repos(active_sessions=orphans)
-        sessions_repo.create.side_effect = [10, 11]
+        sessions_repo.add.side_effect = [MagicMock(id=10), MagicMock(id=11)]
         manager = RecoveryManager(active_repo, sessions_repo)
 
         result = manager.recover()
 
         assert len(result.recovered_sessions) == 2
         assert result.discarded_count == 1
-        assert sessions_repo.create.call_count == 2
+        assert sessions_repo.add.call_count == 2
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +319,7 @@ class TestRepositoryFailures:
         assert result.error_count == 1
         assert result.total_found == 1
         assert len(result.recovered_sessions) == 0
-        sessions_repo.create.assert_not_called()
+        sessions_repo.add.assert_not_called()
 
     def test_session_save_failure_counts_as_error(self):
         """If saving a session fails, it counts as an error not a discard."""
@@ -328,7 +328,7 @@ class TestRepositoryFailures:
             start_time=datetime.now(tz=timezone.utc) - timedelta(hours=1),
         )
         active_repo, sessions_repo = make_repos(active_sessions=[orphan])
-        sessions_repo.create.side_effect = Exception("Write failed")
+        sessions_repo.add.side_effect = Exception("Write failed")
 
         manager = RecoveryManager(active_repo, sessions_repo)
         result = manager.recover()
@@ -343,7 +343,7 @@ class TestRepositoryFailures:
             start_time=datetime.now(tz=timezone.utc) - timedelta(hours=1),
         )
         active_repo, sessions_repo = make_repos(active_sessions=[orphan])
-        active_repo.delete.side_effect = Exception("Delete failed")
+        active_repo.end_session.side_effect = Exception("Delete failed")
 
         manager = RecoveryManager(active_repo, sessions_repo)
 
@@ -351,7 +351,7 @@ class TestRepositoryFailures:
         result = manager.recover()
 
         # Session was still saved despite delete failure
-        assert sessions_repo.create.call_count == 1
+        assert sessions_repo.add.call_count == 1
 
     def test_partial_failure_continues_other_sessions(self):
         """If one session fails, recovery continues for remaining sessions."""
@@ -363,7 +363,7 @@ class TestRepositoryFailures:
         ]
         active_repo, sessions_repo = make_repos(active_sessions=orphans)
         # Second create() call fails
-        sessions_repo.create.side_effect = [100, Exception("Write error"), 102]
+        sessions_repo.add.side_effect = [MagicMock(id=100), Exception("Write error"), MagicMock(id=102)]
 
         manager = RecoveryManager(active_repo, sessions_repo)
         result = manager.recover()
@@ -524,7 +524,7 @@ class TestFullRecoveryScenario:
 
         active_repo, sessions_repo = make_repos(
             active_sessions=[game_session],
-            create_returns=200,
+            add_returns_id=200,
         )
         manager = RecoveryManager(active_repo, sessions_repo)
 
@@ -544,10 +544,10 @@ class TestFullRecoveryScenario:
         assert 10600 <= recovered.duration_seconds <= 11000
 
         # Active session was cleaned up
-        active_repo.delete.assert_called_once_with(1)
+        active_repo.end_session.assert_called_once_with(1)
 
         # Session was stored with correct data
-        saved: Session = sessions_repo.create.call_args[0][0]
+        saved: Session = sessions_repo.add.call_args[0][0]
         assert saved.game_id == 42
         assert saved.duration_seconds == recovered.duration_seconds
         assert saved.start_time == crash_time
@@ -563,7 +563,7 @@ class TestFullRecoveryScenario:
             make_active_session(id=2, game_id=2, start_time=now - timedelta(hours=1)),
         ]
         active_repo, sessions_repo = make_repos(active_sessions=sessions)
-        sessions_repo.create.side_effect = [301, 302]
+        sessions_repo.add.side_effect = [MagicMock(id=301), MagicMock(id=302)]
         manager = RecoveryManager(active_repo, sessions_repo)
 
         result = manager.recover()

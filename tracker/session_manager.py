@@ -1,5 +1,3 @@
-# imports tracker.tracking_state
-
 """
 tracker/session_manager.py
 
@@ -19,38 +17,33 @@ import logging
 from datetime import datetime
 from typing import Protocol
 
+from database.models import ActiveSession as DbActiveSession, Session
 from tracker.tracking_state import ActiveSession, TrackingState
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Repository protocols (structural sub-typing — no base class required)
+# Repository protocols (structural sub-typing — matches real repo interfaces)
 # ---------------------------------------------------------------------------
 
 class ActiveSessionsRepositoryProtocol(Protocol):
-    def create(self, game_id: int, process_id: int, start_time: datetime) -> int:
-        """Insert a new active_session row; return its PK."""
+    def start_session(self, active_session: DbActiveSession) -> DbActiveSession:
+        """Insert a new active_session row; return it with id populated."""
         ...
 
-    def delete(self, active_session_id: int) -> None:
+    def end_session(self, active_session_id: int) -> None:
         """Remove the active_session row by PK."""
         ...
 
-    def get_all(self) -> list[dict]:
+    def get_all(self) -> list[DbActiveSession]:
         """Return all rows from active_sessions."""
         ...
 
 
 class SessionsRepositoryProtocol(Protocol):
-    def create(
-        self,
-        game_id: int,
-        start_time: datetime,
-        end_time: datetime,
-        duration_seconds: int,
-    ) -> int:
-        """Insert a completed session row; return its PK."""
+    def add(self, session: Session) -> Session:
+        """Insert a completed session row; return it with id populated."""
         ...
 
 
@@ -107,17 +100,18 @@ class SessionManager:
         start_time = datetime.now()
 
         try:
-            active_session_id = self._active_sessions_repo.create(
+            db_session = DbActiveSession(
                 game_id=game_id,
                 process_id=process_id,
                 start_time=start_time,
             )
+            saved = self._active_sessions_repo.start_session(db_session)
         except Exception:
             logger.exception("Failed to persist active_session for game_id=%d", game_id)
             return None
 
         session = ActiveSession(
-            active_session_id=active_session_id,
+            active_session_id=saved.id,
             game_id=game_id,
             game_name=game.name,
             process_id=process_id,
@@ -127,7 +121,7 @@ class SessionManager:
 
         logger.info(
             "Session started: game=%r game_id=%d pid=%d active_session_id=%d",
-            game.name, game_id, process_id, active_session_id,
+            game.name, game_id, process_id, saved.id,
         )
         return session
 
@@ -150,15 +144,16 @@ class SessionManager:
 
         # Persist the completed session
         try:
-            session_id = self._sessions_repo.create(
+            db_session = Session(
                 game_id=game_id,
                 start_time=session.start_time,
                 end_time=end_time,
                 duration_seconds=duration_seconds,
             )
+            saved = self._sessions_repo.add(db_session)
             logger.info(
                 "Session saved: game=%r session_id=%d duration=%ds",
-                session.game_name, session_id, duration_seconds,
+                session.game_name, saved.id, duration_seconds,
             )
         except Exception:
             logger.exception("Failed to save completed session for game_id=%d", game_id)
@@ -168,10 +163,10 @@ class SessionManager:
 
         # Remove the active_session row (crash-recovery record no longer needed)
         try:
-            self._active_sessions_repo.delete(session.active_session_id)
+            self._active_sessions_repo.end_session(session.active_session_id)
         except Exception:
             logger.exception(
-                "Failed to delete active_session id=%d — may cause duplicate on next restart",
+                "Failed to end active_session id=%d — may cause duplicate on next restart",
                 session.active_session_id,
             )
 
