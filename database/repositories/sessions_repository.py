@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from dataclasses import dataclass
 from datetime import UTC, datetime, date, timedelta
 
 from database.models.session import Session
@@ -22,10 +23,39 @@ from database.models.session import Session
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class SessionView:
+    """
+    A session row enriched with the game name via JOIN.
+
+    Returned by query_sessions() for display in the history UI.
+    """
+
+    id: int
+    game_id: int
+    game_name: str
+    start_time: datetime
+    end_time: datetime
+    duration_seconds: int
+    created_at: datetime
+
+
 def _row_to_session(row: sqlite3.Row) -> Session:
     return Session(
         id=row["id"],
         game_id=row["game_id"],
+        start_time=datetime.fromisoformat(row["start_time"]),
+        end_time=datetime.fromisoformat(row["end_time"]),
+        duration_seconds=row["duration_seconds"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+    )
+
+
+def _row_to_session_view(row: sqlite3.Row) -> SessionView:
+    return SessionView(
+        id=row["id"],
+        game_id=row["game_id"],
+        game_name=row["game_name"],
         start_time=datetime.fromisoformat(row["start_time"]),
         end_time=datetime.fromisoformat(row["end_time"]),
         duration_seconds=row["duration_seconds"],
@@ -117,6 +147,97 @@ class SessionsRepository:
         else:
             cursor.execute("SELECT * FROM sessions ORDER BY start_time DESC;")
         return [_row_to_session(r) for r in cursor.fetchall()]
+
+    # ------------------------------------------------------------------
+    # Query — search / filter / sort / paginate (Phase 7)
+    # ------------------------------------------------------------------
+
+    def query_sessions(
+        self,
+        *,
+        search_text: str = "",
+        game_id: int | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        min_duration: int | None = None,
+        max_duration: int | None = None,
+        sort_by: str = "start_time",
+        sort_order: str = "DESC",
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[int, list[SessionView]]:
+        """
+        Query sessions with full search, filter, sort, and pagination.
+
+        Returns:
+            (total_count, list of SessionView) — total_count is the number of
+            matching rows *before* LIMIT/OFFSET is applied.
+
+        Accepted sort_by values: start_time, end_time, duration_seconds, game_name.
+        sort_order: ASC or DESC (case-insensitive).
+        """
+        allowed_sort = {"start_time", "end_time", "duration_seconds", "game_name"}
+        if sort_by not in allowed_sort:
+            sort_by = "start_time"
+
+        sort_dir = "ASC" if sort_order.upper() == "ASC" else "DESC"
+
+        where_clauses: list[str] = []
+        params: list[object] = []
+
+        if search_text:
+            where_clauses.append("g.name LIKE ?")
+            params.append(f"%{search_text}%")
+
+        if game_id is not None:
+            where_clauses.append("s.game_id = ?")
+            params.append(game_id)
+
+        if date_from is not None:
+            where_clauses.append("s.start_time >= ?")
+            params.append(datetime.combine(date_from, datetime.min.time()).isoformat())
+
+        if date_to is not None:
+            end_dt = datetime.combine(
+                date_to + timedelta(days=1), datetime.min.time()
+            )
+            where_clauses.append("s.start_time < ?")
+            params.append(end_dt.isoformat())
+
+        if min_duration is not None:
+            where_clauses.append("s.duration_seconds >= ?")
+            params.append(min_duration)
+
+        if max_duration is not None:
+            where_clauses.append("s.duration_seconds <= ?")
+            params.append(max_duration)
+
+        where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+        sort_expr = "g.name" if sort_by == "game_name" else f"s.{sort_by}"
+
+        count_sql = (
+            f"SELECT COUNT(*) FROM sessions s "
+            f"JOIN games g ON s.game_id = g.id WHERE {where_sql};"
+        )
+
+        data_sql = (
+            f"SELECT s.*, g.name AS game_name "
+            f"FROM sessions s "
+            f"JOIN games g ON s.game_id = g.id "
+            f"WHERE {where_sql} "
+            f"ORDER BY {sort_expr} {sort_dir} "
+            f"LIMIT ? OFFSET ?;"
+        )
+
+        cursor = self._conn.cursor()
+        cursor.execute(count_sql, params)
+        total = cursor.fetchone()[0]
+
+        cursor.execute(data_sql, params + [limit, offset])
+        results = [_row_to_session_view(r) for r in cursor.fetchall()]
+
+        return total, results
 
     # ------------------------------------------------------------------
     # Read — statistics (AC-004 through AC-007)
