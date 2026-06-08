@@ -22,6 +22,8 @@ from statistics.models import (
     LifetimeStats,
     MonthlyStats,
     WeeklyStats,
+    DailyActivity,
+    MonthlyActivity,
 )
 
 logger = logging.getLogger(__name__)
@@ -323,3 +325,92 @@ class PlaytimeCalculator:
 
         summaries.sort(key=lambda s: s.total_seconds, reverse=True)
         return summaries
+
+    # ------------------------------------------------------------------
+    # Chart data — daily activity (last N days)
+    # ------------------------------------------------------------------
+
+    def get_daily_activity(self, days: int = 30) -> DailyActivity:
+        """
+        Return daily playtime totals for the last N days.
+
+        Uses the efficient get_daily_totals_for_range query — single SQL
+        aggregation, not per-session iteration.
+        """
+        end = date.today()
+        start = end - timedelta(days=days - 1)
+
+        daily = self._sessions.get_daily_totals_for_range(start, end)
+
+        dates_list: list[date] = []
+        values_list: list[int] = []
+        max_value = 0
+
+        current = start
+        while current <= end:
+            dates_list.append(current)
+            secs = daily.get(current, 0)
+            values_list.append(secs)
+            if secs > max_value:
+                max_value = secs
+            current += timedelta(days=1)
+
+        return DailyActivity(
+            dates=dates_list,
+            values=values_list,
+            max_value=max_value,
+        )
+
+    # ------------------------------------------------------------------
+    # Chart data — monthly activity (last N months)
+    # ------------------------------------------------------------------
+
+    def get_monthly_activity(self, months: int = 12) -> MonthlyActivity:
+        """
+        Return monthly playtime totals for the last N months.
+
+        Aggregates from daily totals in a single query to avoid N+1
+        monthly queries.
+        """
+        today = date.today()
+
+        # Walk back N-1 months to find start
+        start_month = today.month - (months - 1)
+        start_year = today.year
+        while start_month <= 0:
+            start_month += 12
+            start_year -= 1
+
+        range_start = date(start_year, start_month, 1)
+        daily = self._sessions.get_daily_totals_for_range(range_start, today)
+
+        # Aggregate by month
+        monthly_map: dict[str, int] = {}
+        for d, secs in daily.items():
+            key = f"{d.year}-{d.month:02d}"
+            monthly_map[key] = monthly_map.get(key, 0) + secs
+
+        # Fill missing months with 0 and build ordered lists
+        labels: list[str] = []
+        values_list: list[int] = []
+        max_value = 0
+
+        y, m = start_year, start_month
+        while (y < today.year) or (y == today.year and m <= today.month):
+            key = f"{y}-{m:02d}"
+            labels.append(key)
+            secs = monthly_map.get(key, 0)
+            values_list.append(secs)
+            if secs > max_value:
+                max_value = secs
+
+            m += 1
+            if m > 12:
+                m = 1
+                y += 1
+
+        return MonthlyActivity(
+            labels=labels,
+            values=values_list,
+            max_value=max_value,
+        )

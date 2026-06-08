@@ -81,3 +81,22 @@ class GamePlaytimeSummary:
     game_name: str
     total_seconds: int
     session_count: int
+
+
+@dataclass
+class DailyActivity:
+    """Daily activity data for charting (last N days)."""
+    dates: list[date]
+    values: list[int]
+    """Seconds per day."""
+    max_value: int
+
+
+@dataclass
+class MonthlyActivity:
+    """Monthly activity data for charting (last N months)."""
+    labels: list[str]
+    """YYYY-MM format labels."""
+    values: list[int]
+    """Seconds per month."""
+    max_value: int

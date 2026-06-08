@@ -239,7 +239,7 @@ Charts
 
 Status:
 
-Not Started
+Done
 
 Scope:
 

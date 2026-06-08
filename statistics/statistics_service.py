@@ -30,9 +30,11 @@ from typing import Optional
 from database.repositories.games_repository import GamesRepository
 from database.repositories.sessions_repository import SessionsRepository
 from statistics.models import (
+    DailyActivity,
     DailyStats,
     GamePlaytimeSummary,
     LifetimeStats,
+    MonthlyActivity,
     MonthlyStats,
     TrendData,
     WeeklyStats,
@@ -123,6 +125,22 @@ class StatisticsService:
         Return all games sorted by total playtime descending.
         """
         return self._calculator.get_game_playtime_summaries()
+
+    # ------------------------------------------------------------------
+    # Chart data (Phase 8)
+    # ------------------------------------------------------------------
+
+    def get_daily_activity(self, days: int = 30) -> DailyActivity:
+        """
+        Return daily playtime totals for the last N days for charting.
+        """
+        return self._calculator.get_daily_activity(days=days)
+
+    def get_monthly_activity(self, months: int = 12) -> MonthlyActivity:
+        """
+        Return monthly playtime totals for the last N months for charting.
+        """
+        return self._calculator.get_monthly_activity(months=months)
 
     # ------------------------------------------------------------------
     # Trend analysis
