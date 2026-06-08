@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime, date, timedelta
+from datetime import UTC, datetime, date, timedelta
 
 from database.models.session import Session
 
@@ -47,7 +47,7 @@ class SessionsRepository:
     # ------------------------------------------------------------------
 
     def add(self, session: Session) -> Session:
-        now = datetime.utcnow()
+        now = datetime.now(UTC).replace(tzinfo=None)
         session.created_at = now
 
         cursor = self._conn.cursor()

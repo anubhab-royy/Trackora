@@ -14,7 +14,7 @@ Purpose:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -33,7 +33,7 @@ class ActiveSession:
     game_id: int
     process_id: int
     start_time: datetime
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC).replace(tzinfo=None))
     id: int | None = None  # None until persisted
 
     def __post_init__(self) -> None:

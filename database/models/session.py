@@ -9,7 +9,7 @@ Maps directly to the `sessions` table defined in database_schema.md.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -30,7 +30,7 @@ class Session:
     start_time: datetime
     end_time: datetime
     duration_seconds: int
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC).replace(tzinfo=None))
     id: int | None = None  # None until persisted
 
     def __post_init__(self) -> None:

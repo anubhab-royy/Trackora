@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime
 
 from database.models.active_session import ActiveSession
 
@@ -67,7 +67,7 @@ class ActiveSessionsRepository:
         Returns:
             The same ActiveSession with its `id` field populated.
         """
-        now = datetime.utcnow()
+        now = datetime.now(UTC).replace(tzinfo=None)
         active_session.created_at = now
 
         cursor = self._conn.cursor()

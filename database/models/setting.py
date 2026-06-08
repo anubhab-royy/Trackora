@@ -16,7 +16,7 @@ Known keys (as of v1.0):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -32,7 +32,7 @@ class Setting:
 
     key: str
     value: str
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC).replace(tzinfo=None))
 
     def __post_init__(self) -> None:
         """Validate fields after construction."""

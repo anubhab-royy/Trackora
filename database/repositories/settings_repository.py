@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime
 
 from database.models.setting import Setting
 
@@ -89,7 +89,7 @@ class SettingsRepository:
         Returns:
             The persisted Setting.
         """
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(UTC).replace(tzinfo=None).isoformat()
         cursor = self._conn.cursor()
         cursor.execute(
             """
@@ -117,7 +117,7 @@ class SettingsRepository:
         Args:
             defaults: Mapping of {key: default_value}.
         """
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(UTC).replace(tzinfo=None).isoformat()
         cursor = self._conn.cursor()
         for key, value in defaults.items():
             cursor.execute(

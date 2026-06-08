@@ -9,7 +9,7 @@ Maps directly to the `games` table defined in database_schema.md.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -37,8 +37,8 @@ class Game:
     is_enabled: bool = True
     first_played: datetime | None = None
     last_played: datetime | None = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC).replace(tzinfo=None))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC).replace(tzinfo=None))
     id: int | None = None  # None until persisted
 
     def __post_init__(self) -> None:

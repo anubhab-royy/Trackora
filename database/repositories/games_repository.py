@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime
 
 from database.models.game import Game
 
@@ -34,8 +34,8 @@ def _row_to_game(row: sqlite3.Row) -> Game:
         is_enabled=bool(row["is_enabled"]),
         first_played=_parse_dt(row["first_played"]),
         last_played=_parse_dt(row["last_played"]),
-        created_at=_parse_dt(row["created_at"]) or datetime.utcnow(),
-        updated_at=_parse_dt(row["updated_at"]) or datetime.utcnow(),
+        created_at=_parse_dt(row["created_at"]) or datetime.now(UTC).replace(tzinfo=None),
+        updated_at=_parse_dt(row["updated_at"]) or datetime.now(UTC).replace(tzinfo=None),
     )
 
 
@@ -79,7 +79,7 @@ class GamesRepository:
         Raises:
             ValueError: If a game with the same executable_path already exists.
         """
-        now = datetime.utcnow()
+        now = datetime.now(UTC).replace(tzinfo=None)
         game.created_at = now
         game.updated_at = now
 
@@ -172,7 +172,7 @@ class GamesRepository:
         if game.id is None:
             raise ValueError("Cannot update a Game that has no id.")
 
-        game.updated_at = datetime.utcnow()
+        game.updated_at = datetime.now(UTC).replace(tzinfo=None)
         cursor = self._conn.cursor()
         cursor.execute(
             """
@@ -220,11 +220,44 @@ class GamesRepository:
             (
                 _dt_str(timestamp),
                 _dt_str(timestamp),
-                _dt_str(datetime.utcnow()),
+                _dt_str(datetime.now(UTC).replace(tzinfo=None)),
                 game_id,
             ),
         )
         self._conn.commit()
+
+    # ------------------------------------------------------------------
+    # Enable / Disable  (added Phase 5)
+    # ------------------------------------------------------------------
+
+    def set_enabled(self, game_id: int, enabled: bool) -> None:
+        """
+        Set the is_enabled flag for a game.
+
+        Args:
+            game_id: Primary key of the game to update.
+            enabled: True to enable tracking, False to disable.
+        """
+        cursor = self._conn.cursor()
+        cursor.execute(
+            """
+            UPDATE games
+            SET is_enabled = ?,
+                updated_at = ?
+            WHERE id = ?;
+            """,
+            (
+                1 if enabled else 0,
+                datetime.now(UTC).replace(tzinfo=None).isoformat(),
+                game_id,
+            ),
+        )
+        self._conn.commit()
+        logger.info(
+            "Game id=%s tracking %s",
+            game_id,
+            "enabled" if enabled else "disabled",
+        )
 
     # ------------------------------------------------------------------
     # Delete
