@@ -19,6 +19,14 @@ from ui.dashboard.dashboard_controller import (
 )
 
 
+def _make_ctrl(svc: MagicMock) -> DashboardController:
+    return DashboardController(
+        svc,
+        active_sessions_repo=MagicMock(),
+        games_repo=MagicMock(),
+    )
+
+
 # ---------------------------------------------------------------------------
 # format_duration unit tests
 # ---------------------------------------------------------------------------
@@ -81,37 +89,37 @@ class TestDashboardController:
 
     def test_load_dashboard_data_returns_dataclass(self):
         svc = _make_service()
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         data = ctrl.load_dashboard_data()
         assert isinstance(data, DashboardData)
 
     def test_total_playtime_formatted_correctly(self):
         svc = _make_service(lifetime_seconds=7200)  # 2h 0m
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         data = ctrl.load_dashboard_data()
         assert data.total_playtime == "2h 0m"
 
     def test_today_playtime_formatted_correctly(self):
         svc = _make_service(daily_seconds=1800)  # 30m
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         data = ctrl.load_dashboard_data()
         assert data.today_playtime == "30m"
 
     def test_weekly_playtime_formatted_correctly(self):
         svc = _make_service(weekly_seconds=3_600 * 10)  # 10h 0m
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         data = ctrl.load_dashboard_data()
         assert data.week_playtime == "10h 0m"
 
     def test_monthly_playtime_formatted_correctly(self):
         svc = _make_service(monthly_seconds=3_600 * 25 + 30 * 60)  # 25h 30m
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         data = ctrl.load_dashboard_data()
         assert data.month_playtime == "25h 30m"
 
     def test_zero_values_display_zero(self):
         svc = _make_service()
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         data = ctrl.load_dashboard_data()
         assert data.total_playtime == "0m"
         assert data.today_playtime == "0m"
@@ -120,45 +128,33 @@ class TestDashboardController:
 
     def test_most_played_game_populated(self):
         most_played = MagicMock()
-        most_played.name = "Cyberpunk 2077"
+        most_played.game_name = "Cyberpunk 2077"
         most_played.total_seconds = 3_600 * 50  # 50h 0m
-        most_played.icon_path = ""
         svc = _make_service(most_played=most_played)
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         data = ctrl.load_dashboard_data()
         assert data.most_played_game_name == "Cyberpunk 2077"
         assert data.most_played_game_hours == "50h 0m"
 
     def test_no_most_played_game_shows_default(self):
         svc = _make_service(most_played=None)
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         data = ctrl.load_dashboard_data()
         assert data.most_played_game_name == "No games tracked yet"
         assert data.most_played_game_hours == "—"
 
-    def test_most_played_game_icon_path_propagated(self):
+    def test_most_played_game_icon_defaults_empty(self):
         most_played = MagicMock()
-        most_played.name = "Half-Life 2"
-        most_played.total_seconds = 3600
-        most_played.icon_path = "/path/to/icon.png"
-        svc = _make_service(most_played=most_played)
-        ctrl = DashboardController(svc)
-        data = ctrl.load_dashboard_data()
-        assert data.most_played_game_icon == "/path/to/icon.png"
-
-    def test_most_played_game_missing_icon_path_defaults_empty(self):
-        most_played = MagicMock()
-        most_played.name = "Doom"
+        most_played.game_name = "Doom"
         most_played.total_seconds = 1800
-        most_played.icon_path = ""
         svc = _make_service(most_played=most_played)
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         data = ctrl.load_dashboard_data()
         assert data.most_played_game_icon == ""
 
     def test_service_called_once_per_load(self):
         svc = _make_service()
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         ctrl.load_dashboard_data()
         svc.get_lifetime_stats.assert_called_once()
         svc.get_daily_stats.assert_called_once()
@@ -168,7 +164,7 @@ class TestDashboardController:
 
     def test_multiple_refreshes_call_service_each_time(self):
         svc = _make_service()
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         ctrl.load_dashboard_data()
         ctrl.load_dashboard_data()
         assert svc.get_lifetime_stats.call_count == 2
@@ -180,7 +176,7 @@ class TestDashboardController:
         svc.get_weekly_stats.return_value = None
         svc.get_monthly_stats.return_value = None
         svc.get_most_played_game.return_value = None
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         data = ctrl.load_dashboard_data()
         assert data.total_playtime == "0m"
         assert data.today_playtime == "0m"
@@ -189,27 +185,27 @@ class TestDashboardController:
         """AC-004: lifetime playtime must equal database total."""
         expected_seconds = 3_600 * 100
         svc = _make_service(lifetime_seconds=expected_seconds)
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         data = ctrl.load_dashboard_data()
         assert data.total_playtime == "100h 0m"
 
     def test_daily_stats_match_database(self):
         """AC-005: today's playtime must match database records."""
         svc = _make_service(daily_seconds=3_600 * 3)
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         data = ctrl.load_dashboard_data()
         assert data.today_playtime == "3h 0m"
 
     def test_weekly_stats_correct(self):
         """AC-006: weekly totals must be correct."""
         svc = _make_service(weekly_seconds=3_600 * 20)
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         data = ctrl.load_dashboard_data()
         assert data.week_playtime == "20h 0m"
 
     def test_monthly_stats_correct(self):
         """AC-007: monthly totals must be correct."""
         svc = _make_service(monthly_seconds=3_600 * 80)
-        ctrl = DashboardController(svc)
+        ctrl = _make_ctrl(svc)
         data = ctrl.load_dashboard_data()
         assert data.month_playtime == "80h 0m"

@@ -172,7 +172,7 @@ class SessionManager:
 
         # Update games.last_played
         try:
-            self._games_repo.update_last_played(game_id=game_id, played_at=end_time)
+            self._games_repo.update_last_played(game_id=game_id, timestamp=end_time)
         except Exception:
             logger.exception("Failed to update last_played for game_id=%d", game_id)
 

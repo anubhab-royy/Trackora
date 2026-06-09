@@ -21,14 +21,19 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 
+from services.formatting import format_duration
 from ui.widgets.stat_card import StatCard
 from ui.widgets.game_card import GameCard
-from ui.dashboard.dashboard_controller import DashboardController, DashboardData
+from ui.dashboard.dashboard_controller import (
+    ActiveGameInfo,
+    DashboardController,
+    DashboardData,
+)
 
 logger = logging.getLogger(__name__)
 
-# Refresh dashboard every 60 seconds
-_REFRESH_INTERVAL_MS: int = 60_000
+# Refresh dashboard every 5 seconds (active games need fast updates)
+_REFRESH_INTERVAL_MS: int = 5_000
 
 
 class DashboardWidget(QWidget):
@@ -41,6 +46,7 @@ class DashboardWidget(QWidget):
     - This Week's Playtime
     - This Month's Playtime
     - Most Played Game card
+    - Active Now (currently running games)
 
     Args:
         controller: DashboardController instance.
@@ -63,10 +69,12 @@ class DashboardWidget(QWidget):
     # ------------------------------------------------------------------
 
     def refresh(self) -> None:
-        """Reload all statistics from the controller and update the UI."""
+        """Reload all statistics and active games from the controller."""
         logger.debug("DashboardWidget: refreshing data.")
         data: DashboardData = self._controller.load_dashboard_data()
         self._apply_data(data)
+        active = self._controller.get_active_games()
+        self._update_active_games(active)
 
     # ------------------------------------------------------------------
     # UI Construction
@@ -129,6 +137,13 @@ class DashboardWidget(QWidget):
         layout.addWidget(self._make_section_label("Most Played Game"))
         layout.addWidget(self._build_game_card_section())
 
+        # --- Divider ---
+        layout.addWidget(self._make_divider())
+
+        # --- Section: Active Now ---
+        layout.addWidget(self._make_section_label("Active Now"))
+        layout.addWidget(self._build_active_now_section())
+
         layout.addStretch()
 
     def _build_stat_cards_row(self) -> QHBoxLayout:
@@ -167,6 +182,42 @@ class DashboardWidget(QWidget):
             row.addWidget(card)
 
         return row
+
+    def _build_active_now_section(self) -> QWidget:
+        """Build the active games display section."""
+        wrapper = QWidget()
+        wrapper.setObjectName("ActiveNow")
+        self._active_layout = QVBoxLayout(wrapper)
+        self._active_layout.setContentsMargins(0, 0, 0, 0)
+        self._active_layout.setSpacing(8)
+
+        self._active_empty = QLabel("No games currently active")
+        self._active_empty.setObjectName("EmptyStateLabel")
+        self._active_layout.addWidget(self._active_empty)
+
+        self._active_items: list[QLabel] = []
+        return wrapper
+
+    def _update_active_games(self, active: list[ActiveGameInfo]) -> None:
+        """Update the active games display with fresh data."""
+        for item in self._active_items:
+            self._active_layout.removeWidget(item)
+            item.deleteLater()
+        self._active_items.clear()
+
+        if not active:
+            self._active_empty.show()
+            return
+
+        self._active_empty.hide()
+        for g in active:
+            dur = format_duration(g.duration_seconds)
+            label = QLabel(f"● {g.game_name}  —  running for {dur}")
+            label.setStyleSheet(
+                "font-size: 13px; padding: 4px 0; color: #a6e3a1;"
+            )
+            self._active_layout.addWidget(label)
+            self._active_items.append(label)
 
     def _build_game_card_section(self) -> QWidget:
         """Build the most-played game card."""

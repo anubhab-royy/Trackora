@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Optional
@@ -89,6 +90,12 @@ class LoggingService:
                 root.removeHandler(h)
 
         root.addHandler(handler)
+
+        # Add console handler so errors are visible in the terminal
+        console = logging.StreamHandler(sys.stderr)
+        console.setLevel(logging.WARNING)
+        console.setFormatter(formatter)
+        root.addHandler(console)
 
         cls._initialized = True
         logging.getLogger(cls.__name__).info(

@@ -32,7 +32,11 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QAction, QKeySequence
 
-from database.repositories import SettingsRepository
+from database.repositories import (
+    ActiveSessionsRepository,
+    GamesRepository,
+    SettingsRepository,
+)
 from services.export_service import ExportService
 from services.game_service import GameService
 from services.session_history_service import SessionHistoryService
@@ -69,6 +73,8 @@ class MainWindow(QMainWindow):
         export_service: ExportService,
         theme_manager: ThemeManager,
         settings_repo: SettingsRepository,
+        active_sessions_repo: ActiveSessionsRepository,
+        games_repo: GamesRepository,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -78,6 +84,8 @@ class MainWindow(QMainWindow):
         self._export_service = export_service
         self._theme_manager = theme_manager
         self._settings_repo = settings_repo
+        self._active_repo = active_sessions_repo
+        self._games_repo = games_repo
 
         self.setWindowTitle("GameTracker")
         self.setMinimumSize(1000, 650)
@@ -129,21 +137,27 @@ class MainWindow(QMainWindow):
         root.addWidget(self._content, stretch=1)
 
     def _build_views(self) -> None:
-        dashboard_controller = DashboardController(self._statistics_service)
-        dashboard_view = DashboardWidget(dashboard_controller, self)
-        self._content.addWidget(dashboard_view)
+        self._dash_ctrl = DashboardController(
+            self._statistics_service, self._active_repo, self._games_repo
+        )
+        self._dash_view = DashboardWidget(self._dash_ctrl, self)
+        self._content.addWidget(self._dash_view)
 
-        games_view = GamesView(self)
-        GamesController(games_view, self._game_service)
-        self._content.addWidget(games_view)
+        self._games_view = GamesView(self)
+        self._games_ctrl = GamesController(self._games_view, self._game_service)
+        self._content.addWidget(self._games_view)
 
-        history_view = HistoryView(self)
-        HistoryController(history_view, self._session_history_service)
-        self._content.addWidget(history_view)
+        self._hist_view = HistoryView(self)
+        self._hist_ctrl = HistoryController(
+            self._hist_view, self._session_history_service
+        )
+        self._content.addWidget(self._hist_view)
 
-        charts_view = ChartsView(self)
-        ChartsController(charts_view, self._statistics_service)
-        self._content.addWidget(charts_view)
+        self._charts_view = ChartsView(self)
+        self._charts_ctrl = ChartsController(
+            self._charts_view, self._statistics_service
+        )
+        self._content.addWidget(self._charts_view)
 
     def _connect_nav(self) -> None:
         self._nav.currentRowChanged.connect(self._content.setCurrentIndex)
@@ -180,8 +194,8 @@ class MainWindow(QMainWindow):
     def _setup_tray(self) -> None:
         self._tray = TrayService(self, self)
         self._tray.show_requested.connect(self._show_from_tray)
-        self._tray.dashboard_requested.connect(lambda: self.switch_to("Dashboard"))
-        self._tray.history_requested.connect(lambda: self.switch_to("History"))
+        self._tray.dashboard_requested.connect(lambda: (self.switch_to("Dashboard"), self._show_from_tray()))
+        self._tray.history_requested.connect(lambda: (self.switch_to("History"), self._show_from_tray()))
         self._tray.quit_requested.connect(self._quit_app)
         self._tray.show()
 
@@ -232,7 +246,7 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        ok = self._export_service.export_sessions_csv(Path(path))
+        ok = self._export_service.export_csv(Path(path))
         if ok:
             QMessageBox.information(
                 self, "Export", f"Sessions exported to:\n{path}"
@@ -250,7 +264,7 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        ok = self._export_service.export_all_json(Path(path))
+        ok = self._export_service.export_backup(Path(path))
         if ok:
             QMessageBox.information(
                 self, "Backup", f"Backup saved to:\n{path}"

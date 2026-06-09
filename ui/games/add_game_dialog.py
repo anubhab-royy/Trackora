@@ -119,7 +119,7 @@ class AddGameDialog(QDialog):
         path_layout.setSpacing(6)
 
         self._path_edit = QLineEdit()
-        self._path_edit.setPlaceholderText("C:\\Games\\game.exe")
+        self._path_edit.setPlaceholderText("/path/to/game/executable")
         self._path_edit.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
@@ -176,7 +176,7 @@ class AddGameDialog(QDialog):
             self,
             "Select Game Executable",
             start_dir,
-            "Executables (*.exe);;All Files (*)",
+            "All Files (*)",
         )
         if file_path:
             self._path_edit.setText(file_path)

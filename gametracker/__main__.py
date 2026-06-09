@@ -95,6 +95,8 @@ def main() -> None:
         export_service=export_service,
         theme_manager=theme_manager,
         settings_repo=settings_repo,
+        active_sessions_repo=active_sessions_repo,
+        games_repo=games_repo,
     )
 
     def reload_tracked_games() -> None:

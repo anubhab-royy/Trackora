@@ -100,8 +100,8 @@ class FakeGamesRepo:
     def __init__(self) -> None:
         self._last_played: dict[int, object] = {}
 
-    def update_last_played(self, game_id: int, played_at: datetime) -> None:
-        self._last_played[game_id] = played_at
+    def update_last_played(self, game_id: int, timestamp: datetime) -> None:
+        self._last_played[game_id] = timestamp
 
     # Test helper
     def get_last_played(self, game_id: int):

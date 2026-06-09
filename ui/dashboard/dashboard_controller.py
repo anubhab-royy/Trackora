@@ -9,8 +9,11 @@ Formats raw seconds into human-readable strings.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 
+from database.repositories.active_sessions_repository import ActiveSessionsRepository
+from database.repositories.games_repository import GamesRepository
 from services.formatting import format_duration
 from statistics.statistics_service import StatisticsService
 
@@ -29,16 +32,34 @@ class DashboardData:
     most_played_game_icon: str
 
 
+@dataclass
+class ActiveGameInfo:
+    """Information about a currently tracked active game session."""
+    game_name: str
+    game_id: int
+    start_time: datetime
+    duration_seconds: int
+
+
 class DashboardController:
     """
     Retrieves statistics and formats them for display.
 
     Args:
-        statistics_service: An instance of StatisticsService (from statistics/).
+        statistics_service:    An instance of StatisticsService.
+        active_sessions_repo:  ActiveSessionsRepository for live session data.
+        games_repo:            GamesRepository for game names.
     """
 
-    def __init__(self, statistics_service: StatisticsService) -> None:
+    def __init__(
+        self,
+        statistics_service: StatisticsService,
+        active_sessions_repo: ActiveSessionsRepository,
+        games_repo: GamesRepository,
+    ) -> None:
         self._service = statistics_service
+        self._active_repo = active_sessions_repo
+        self._games_repo = games_repo
         logger.info("DashboardController initialised.")
 
     def load_dashboard_data(self) -> DashboardData:
@@ -65,10 +86,9 @@ class DashboardController:
             game_icon: str = ""
 
             if most_played:
-                game_name = most_played.name
+                game_name = most_played.game_name
                 game_seconds = most_played.total_seconds
                 game_hours = format_duration(game_seconds)
-                game_icon = most_played.icon_path
 
             data = DashboardData(
                 total_playtime=format_duration(total_seconds),
@@ -102,3 +122,27 @@ class DashboardController:
                 most_played_game_hours="—",
                 most_played_game_icon="",
             )
+
+    def get_active_games(self) -> list[ActiveGameInfo]:
+        """Return info for all currently tracked active game sessions."""
+        try:
+            active = self._active_repo.get_all()
+            if not active:
+                return []
+            now = datetime.now()
+            result: list[ActiveGameInfo] = []
+            for a in active:
+                game = self._games_repo.get_by_id(a.game_id)
+                if game is None:
+                    continue
+                duration = int((now - a.start_time).total_seconds())
+                result.append(ActiveGameInfo(
+                    game_name=game.name,
+                    game_id=a.game_id,
+                    start_time=a.start_time,
+                    duration_seconds=duration,
+                ))
+            return result
+        except Exception as exc:
+            logger.error("Failed to get active games: %s", exc)
+            return []
