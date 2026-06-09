@@ -23,11 +23,29 @@ from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
+from gametracker import __version__
+
 logger = logging.getLogger(__name__)
 
 _LOG_FORMAT = "%(asctime)s [%(levelname)-7s] %(name)s | %(message)s"
 _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
-_DEFAULT_LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+
+
+def _get_default_log_dir() -> Path:
+    """Return a platform-appropriate log directory.
+
+    On Windows:  %APPDATA%/GameTracker/logs/
+    On Linux:     ~/.local/share/GameTracker/logs/
+    When frozen:  same as above (never next to the executable).
+    """
+    if os.name == "nt":
+        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    else:
+        base = Path.home() / ".local" / "share"
+    return base / "GameTracker" / "logs"
+
+
+_DEFAULT_LOG_DIR = _get_default_log_dir()
 
 
 class LoggingService:
@@ -104,5 +122,5 @@ class LoggingService:
 
     @classmethod
     def get_log_dir(cls) -> Path:
-        """Return the default log directory path."""
-        return _DEFAULT_LOG_DIR
+        """Return the default log directory path (APPDATA-safe)."""
+        return _get_default_log_dir()

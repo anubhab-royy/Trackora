@@ -8,6 +8,7 @@ with a QApplication, main window, system tray, and background process monitor.
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -128,8 +129,19 @@ def main() -> None:
 
 
 def _get_db_path() -> Path:
-    """Return the database path. Uses an XDG-friendly default on Linux."""
-    return Path.home() / ".gametracker" / "gametracker.db"
+    """Return the database path.
+
+    On Windows:  %APPDATA%/GameTracker/gametracker.db
+    On Linux:     ~/.gametracker/gametracker.db
+    When frozen:  same as above (never next to the executable).
+    """
+    if os.name == "nt":
+        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    else:
+        base = Path.home()
+        base = base / ".gametracker"
+        return base / "gametracker.db"
+    return base / "GameTracker" / "gametracker.db"
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ from services.logging_service import LoggingService
 from services.session_history_service import SessionHistoryService
 from services.startup_service import StartupService
 from services.tray_service import TrayService
+from services.update_service import UpdateService
 
 __all__ = [
     "ExportService",
@@ -14,4 +15,5 @@ __all__ = [
     "SessionHistoryService",
     "StartupService",
     "TrayService",
+    "UpdateService",
 ]

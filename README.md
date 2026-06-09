@@ -1,4 +1,4 @@
-# GameTracker
+# GameTracker v1.0.0
 
 A lightweight, privacy-first desktop application that automatically tracks your gaming sessions and provides detailed analytics. Runs silently in the system tray with minimal resource usage.
 
@@ -17,31 +17,48 @@ A lightweight, privacy-first desktop application that automatically tracks your 
 
 ## Requirements
 
-- Python 3.13+
-- PyQt6
-- psutil
-- pyqtgraph
-- SQLite3 (included with Python)
+- Windows 10/11 (recommended), Linux, macOS
+- Python 3.13+ (for development only)
+- 50 MB disk space
 
 ## Installation
 
+### Windows Installer (Recommended)
+
+Download the latest installer from the [Releases](https://github.com/yourusername/gametracker/releases) page.
+
+1. Run `GameTracker-Setup-1.0.0.exe`
+2. Follow the installation wizard
+3. Launch GameTracker from the Start Menu
+
+### Portable Executable (Windows)
+
+Download `GameTracker.exe` from the Releases page and run it directly.
+
+### Development Installation
+
 ```bash
-# Clone the repository
 git clone https://github.com/yourusername/gametracker.git
 cd gametracker
-
-# Create a virtual environment
 python -m venv .venv
-
-# Activate it
 # Windows:
 .venv\Scripts\activate
 # Linux/macOS:
 source .venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
+python -m gametracker
 ```
+
+## Runtime Data Locations
+
+When packaged, GameTracker stores its data at:
+
+| Data        | Windows Path                                  |
+|-------------|-----------------------------------------------|
+| Database    | `%APPDATA%\GameTracker\gametracker.db`        |
+| Logs        | `%APPDATA%\GameTracker\logs\`                 |
+
+No data is stored in the installation directory. Uninstalling GameTracker will leave your data intact.
 
 ## Usage
 
@@ -49,11 +66,11 @@ pip install -r requirements.txt
 python -m gametracker
 ```
 
-Or build a standalone executable (see [BUILD.md](BUILD.md)).
+Or run the installed executable from the Start Menu.
 
-## Application Wiring
+## Building from Source
 
-> **Note:** GameTracker requires an application entry point (`main.py`) and a main window to wire all components together. See `docs/architecture.md` for the component architecture and `BUILD.md` for build instructions.
+See [BUILD.md](BUILD.md) for detailed build instructions for PyInstaller executables and Inno Setup installers.
 
 ## Project Structure
 
@@ -61,7 +78,7 @@ Or build a standalone executable (see [BUILD.md](BUILD.md)).
 gametracker/
 ├── database/              # Database layer
 │   ├── database_manager.py
-│   ├── models.py
+│   ├── models/            # Data models
 │   └── repositories/      # CRUD repositories
 ├── tracker/               # Process monitoring & session management
 │   ├── process_monitor.py
@@ -78,18 +95,19 @@ gametracker/
 │   ├── export_service.py
 │   ├── startup_service.py
 │   ├── tray_service.py
-│   ├── logging_service.py
-│   └── formatting.py
+│   └── logging_service.py
 ├── ui/                    # PyQt6 user interface
 │   ├── dashboard/         # Statistics dashboard
 │   ├── games/             # Game management
 │   ├── history/           # Session history browser
 │   ├── widgets/           # Charts & reusable widgets
 │   ├── themes/            # Dark/light theme manager
-│   ├── controllers/       # UI controllers
-│   └── dashboard_controller.py
-├── tests/                 # Pytest test suite (320+ tests)
+│   ├── icons/             # Application icons
+│   └── controllers/       # UI controllers
+├── tests/                 # Pytest test suite
 ├── docs/                  # Documentation
+├── installer/             # Inno Setup installer scripts
+├── GameTracker.spec       # PyInstaller spec file
 ├── BUILD.md               # Build instructions
 ├── requirements.txt
 └── README.md
@@ -105,17 +123,15 @@ python -m pytest
 python -m pytest --cov=gametracker --cov-report=term-missing
 ```
 
-## Architecture
+### Packaging for Distribution
 
-GameTracker follows a layered architecture:
+```bash
+# Build executable
+pyinstaller GameTracker.spec
 
-1. **Database Layer** — SQLite with WAL mode, repositories for CRUD
-2. **Tracking Layer** — Process monitoring via psutil, session management
-3. **Statistics Layer** — Playtime calculations, trend analysis
-4. **UI Layer** — PyQt6 widgets, controllers, theming
-5. **Services Layer** — Tray, startup, export, logging
-
-See `docs/architecture.md` for the full architecture document.
+# Create installer (requires Inno Setup)
+iscc installer/GameTracker.iss
+```
 
 ## License
 

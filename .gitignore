@@ -1,5 +1,7 @@
 # Virtual environment
 .venv/
+venv/
+env/
 
 # Python bytecode
 __pycache__/
@@ -12,12 +14,16 @@ __pycache__/
 .coverage
 coverage/
 htmlcov/
+*.xml
 
 # Build artifacts
 dist/
 build/
 *.egg-info/
-*.spec
+!GameTracker.spec
+
+# Installer output
+installer/Output/
 
 # Runtime data
 logs/
@@ -29,6 +35,7 @@ logs/
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # IDE
 .vscode/
@@ -36,3 +43,13 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Code signing
+*.pfx
+*.p12
+*.cert
+*.key
+
+# Environment
+.env
+.env.local
