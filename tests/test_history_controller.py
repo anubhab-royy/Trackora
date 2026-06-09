@@ -16,11 +16,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from database.models import SessionView
+from services.formatting import format_duration
 from services.session_history_service import (
     SessionHistoryQuery,
     SessionHistoryResult,
     SessionHistoryService,
-    format_duration,
 )
 
 

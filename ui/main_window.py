@@ -48,13 +48,15 @@ from ui.games.games_controller import GamesController
 from ui.games.games_view import GamesView
 from ui.history.history_controller import HistoryController
 from ui.history.history_view import HistoryView
+from ui.settings.settings_controller import SettingsController
+from ui.settings.settings_view import SettingsView
 from ui.themes.theme_manager import Theme, ThemeManager
 from ui.widgets.charts_controller import ChartsController
 from ui.widgets.charts_view import ChartsView
 
 logger = logging.getLogger(__name__)
 
-_NAV_ITEMS = ["Dashboard", "Games", "History", "Charts"]
+_NAV_ITEMS = ["Dashboard", "Games", "History", "Charts", "Settings"]
 
 
 class MainWindow(QMainWindow):
@@ -158,6 +160,16 @@ class MainWindow(QMainWindow):
             self._charts_view, self._statistics_service
         )
         self._content.addWidget(self._charts_view)
+
+        self._settings_view = SettingsView(self)
+        self._settings_ctrl = SettingsController(
+            view=self._settings_view,
+            settings_repo=self._settings_repo,
+            theme_manager=self._theme_manager,
+            export_service=self._export_service,
+            parent_widget=self,
+        )
+        self._content.addWidget(self._settings_view)
 
     def _connect_nav(self) -> None:
         self._nav.currentRowChanged.connect(self._content.setCurrentIndex)

@@ -42,7 +42,8 @@ from PyQt6.QtWidgets import (
 
 from database.models import Game
 from database.models import SessionView
-from services.session_history_service import format_duration, SessionHistoryResult
+from services.formatting import format_duration
+from services.session_history_service import SessionHistoryResult
 from ui.history.history_table_model import HistoryTableModel
 
 logger = logging.getLogger(__name__)

@@ -20,7 +20,7 @@ from typing import Any
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 
 from database.models import SessionView
-from services.session_history_service import format_duration
+from services.formatting import format_duration
 
 logger = logging.getLogger(__name__)
 
