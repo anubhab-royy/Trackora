@@ -9,8 +9,8 @@ from datetime import datetime, date
 
 import pytest
 
-from statistics.statistics_service import StatisticsService
-from tests.statistics.conftest import insert_game, insert_session
+from gametracker_stats.statistics_service import StatisticsService
+from tests.gametracker_stats.conftest import insert_game, insert_session
 
 
 class TestStatisticsServiceLifetime:

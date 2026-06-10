@@ -11,8 +11,8 @@ from typing import Optional
 
 import pytest
 
-from statistics.trend_analyzer import TrendAnalyzer
-from tests.statistics.conftest import insert_game, insert_session
+from gametracker_stats.trend_analyzer import TrendAnalyzer
+from tests.gametracker_stats.conftest import insert_game, insert_session
 
 
 # ===========================================================================

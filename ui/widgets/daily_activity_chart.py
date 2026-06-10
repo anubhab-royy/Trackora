@@ -15,7 +15,7 @@ import pyqtgraph as pg
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QSizePolicy, QVBoxLayout, QWidget, QLabel
 
-from statistics.models import DailyActivity
+from gametracker_stats.models import DailyActivity
 
 logger = logging.getLogger(__name__)
 

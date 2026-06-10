@@ -15,9 +15,9 @@ import pytest
 from database.database_manager import DatabaseManager
 from database.repositories.games_repository import GamesRepository
 from database.repositories.sessions_repository import SessionsRepository
-from statistics.playtime_calculator import PlaytimeCalculator
-from statistics.statistics_service import StatisticsService
-from statistics.trend_analyzer import TrendAnalyzer
+from gametracker_stats.playtime_calculator import PlaytimeCalculator
+from gametracker_stats.statistics_service import StatisticsService
+from gametracker_stats.trend_analyzer import TrendAnalyzer
 
 
 # ---------------------------------------------------------------------------

@@ -9,8 +9,8 @@ from datetime import datetime, date, timedelta
 
 import pytest
 
-from statistics.playtime_calculator import PlaytimeCalculator
-from tests.statistics.conftest import insert_game, insert_session
+from gametracker_stats.playtime_calculator import PlaytimeCalculator
+from tests.gametracker_stats.conftest import insert_game, insert_session
 
 
 # ===========================================================================

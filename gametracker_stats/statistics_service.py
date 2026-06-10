@@ -29,7 +29,7 @@ from typing import Optional
 
 from database.repositories.games_repository import GamesRepository
 from database.repositories.sessions_repository import SessionsRepository
-from statistics.models import (
+from .models import (
     DailyActivity,
     DailyStats,
     GamePlaytimeSummary,
@@ -39,8 +39,8 @@ from statistics.models import (
     TrendData,
     WeeklyStats,
 )
-from statistics.playtime_calculator import PlaytimeCalculator
-from statistics.trend_analyzer import TrendAnalyzer
+from .playtime_calculator import PlaytimeCalculator
+from .trend_analyzer import TrendAnalyzer
 
 logger = logging.getLogger(__name__)
 

@@ -41,7 +41,7 @@ from services.export_service import ExportService
 from services.game_service import GameService
 from services.session_history_service import SessionHistoryService
 from services.tray_service import TrayService
-from statistics.statistics_service import StatisticsService
+from gametracker_stats.statistics_service import StatisticsService
 from ui.dashboard.dashboard_controller import DashboardController
 from ui.dashboard.dashboard_widget import DashboardWidget
 from ui.games.games_controller import GamesController

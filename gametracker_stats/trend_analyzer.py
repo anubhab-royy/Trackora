@@ -13,8 +13,8 @@ import logging
 from datetime import date, timedelta
 from typing import Optional
 
-from statistics.models import TrendData
-from statistics.playtime_calculator import PlaytimeCalculator
+from .models import TrendData
+from .playtime_calculator import PlaytimeCalculator
 
 logger = logging.getLogger(__name__)
 

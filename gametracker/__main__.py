@@ -27,8 +27,8 @@ from services.game_service import GameService
 from services.logging_service import LoggingService
 from services.session_history_service import SessionHistoryService
 from services.startup_service import StartupService
-from statistics.playtime_calculator import PlaytimeCalculator
-from statistics.statistics_service import StatisticsService
+from gametracker_stats.playtime_calculator import PlaytimeCalculator
+from gametracker_stats.statistics_service import StatisticsService
 from tracker import (
     ProcessMonitor,
     RecoveryManager,

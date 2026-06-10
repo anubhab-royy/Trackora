@@ -30,7 +30,7 @@ a = Analysis(
         "database.repositories",
         "services",
         "services.update_service",
-        "statistics",
+        "gametracker_stats",
         "tracker",
         "ui",
         "ui.dashboard",

@@ -16,7 +16,7 @@ from typing import Optional
 
 from database.repositories.sessions_repository import SessionsRepository
 from database.repositories.games_repository import GamesRepository
-from statistics.models import (
+from .models import (
     DailyStats,
     GamePlaytimeSummary,
     LifetimeStats,

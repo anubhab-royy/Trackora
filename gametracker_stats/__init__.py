@@ -3,7 +3,7 @@ Statistics package for GameTracker.
 Provides lifetime, daily, weekly, monthly statistics and trend analysis.
 """
 
-from statistics.models import (
+from .models import (
     DailyActivity,
     DailyStats,
     GamePlaytimeSummary,
@@ -13,9 +13,9 @@ from statistics.models import (
     TrendData,
     WeeklyStats,
 )
-from statistics.playtime_calculator import PlaytimeCalculator
-from statistics.statistics_service import StatisticsService
-from statistics.trend_analyzer import TrendAnalyzer
+from .playtime_calculator import PlaytimeCalculator
+from .statistics_service import StatisticsService
+from .trend_analyzer import TrendAnalyzer
 
 __all__ = [
     "DailyActivity",

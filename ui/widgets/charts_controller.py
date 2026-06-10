@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 
-from statistics.statistics_service import StatisticsService
+from gametracker_stats.statistics_service import StatisticsService
 from ui.widgets.charts_view import ChartsView
 
 logger = logging.getLogger(__name__)
