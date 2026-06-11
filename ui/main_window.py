@@ -40,6 +40,7 @@ from database.repositories import (
 from services.export_service import ExportService
 from services.game_service import GameService
 from services.session_history_service import SessionHistoryService
+from services.support.support_service import SupportService
 from services.tray_service import TrayService
 from trackora_stats.statistics_service import StatisticsService
 from ui.dashboard.dashboard_controller import DashboardController
@@ -50,13 +51,15 @@ from ui.history.history_controller import HistoryController
 from ui.history.history_view import HistoryView
 from ui.settings.settings_controller import SettingsController
 from ui.settings.settings_view import SettingsView
+from ui.support_center.support_center_controller import SupportCenterController
+from ui.support_center.support_center_widget import SupportCenterWidget
 from ui.themes.theme_manager import Theme, ThemeManager
 from ui.widgets.charts_controller import ChartsController
 from ui.widgets.charts_view import ChartsView
 
 logger = logging.getLogger(__name__)
 
-_NAV_ITEMS = ["Dashboard", "Games", "History", "Charts", "Settings"]
+_NAV_ITEMS = ["Dashboard", "Games", "History", "Charts", "Settings", "Support Center"]
 
 
 class MainWindow(QMainWindow):
@@ -77,6 +80,7 @@ class MainWindow(QMainWindow):
         settings_repo: SettingsRepository,
         active_sessions_repo: ActiveSessionsRepository,
         games_repo: GamesRepository,
+        support_service: SupportService | None = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -88,6 +92,7 @@ class MainWindow(QMainWindow):
         self._settings_repo = settings_repo
         self._active_repo = active_sessions_repo
         self._games_repo = games_repo
+        self._support_service = support_service or SupportService()
 
         self.setWindowTitle("Trackora")
         self.setMinimumSize(1000, 650)
@@ -170,6 +175,13 @@ class MainWindow(QMainWindow):
             parent_widget=self,
         )
         self._content.addWidget(self._settings_view)
+
+        self._support_view = SupportCenterWidget(self)
+        self._support_ctrl = SupportCenterController(
+            view=self._support_view,
+            support_service=self._support_service,
+        )
+        self._content.addWidget(self._support_view)
 
     def _connect_nav(self) -> None:
         self._nav.currentRowChanged.connect(self._content.setCurrentIndex)

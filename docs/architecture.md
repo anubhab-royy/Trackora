@@ -1,18 +1,19 @@
 # Trackora Architecture
 
-Version: 1.0
+Version: 1.1
 
 ---
 
 # System Overview
 
-Trackora consists of five major layers:
+Trackora consists of six major layers:
 
 1. Tracking Layer
 2. Database Layer
 3. Statistics Layer
 4. UI Layer
 5. System Services Layer
+6. Support Layer
 
 ---
 
@@ -137,6 +138,8 @@ ui/history/
 
 ui/games/
 
+ui/support_center/
+
 Features:
 
 * Dashboard
@@ -144,6 +147,7 @@ Features:
 * History
 * Settings
 * Game Management
+* Support Center
 
 ---
 
@@ -163,6 +167,41 @@ Responsibilities:
 * Windows startup
 * Data export
 * Notifications
+
+---
+
+# Support Layer
+
+Responsibility:
+
+Provide user-facing support features.
+
+Modules:
+
+models/support/
+
+services/support/
+
+ui/support_center/
+
+Components:
+
+* Bug reports
+* Feature requests
+* General feedback
+* Upcoming updates display
+
+Architecture:
+
+models/support/ — Domain dataclasses (BugReport, FeatureRequest, FeedbackReport)
+
+services/support/ — SupportService interface (in-memory storage, future GitHub API)
+
+ui/support_center/ — SupportCenterView + SupportCenterController (navigation-based, no submission logic yet)
+
+Dependencies:
+
+* None (standalone layer, no database dependency)
 
 ---
 
