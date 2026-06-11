@@ -10,7 +10,7 @@
 #
 
 # Version — keep in sync with trackora/__init__.py
-version = "1.0.0"
+version = "1.1.0"
 BLOCK_CIPHER_LIST = None
 
 a = Analysis(

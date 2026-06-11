@@ -28,10 +28,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt ruff mypy
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Type check
+        run: mypy trackora database services tracker ui --explicit-package-bases --ignore-missing-imports
 
       - name: Run tests
-        run: python -m pytest --tb=short --cov=trackora --cov-report=term-missing
+        run: python -m pytest --tb=short --cov=trackora --cov=database --cov=services --cov=tracker --cov-report=term-missing
 
   build:
     name: Build executable

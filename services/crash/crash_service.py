@@ -104,12 +104,15 @@ class StartupStateManager:
         Returns:
             True if the previous state was 'running'
             (meaning the app never marked clean shutdown).
-            Also returns True if the state file is unreadable
-            (conservative: assume crash).
+            Also returns True if the state file exists but is
+            corrupted or unreadable (conservative: assume crash).
         """
+        file_exists = self._state_path.is_file()
         state = self.read_state()
         if state is None:
-            # First-ever launch or corrupted file — not a crash.
+            if file_exists:
+                logger.warning("Startup state file exists but is unreadable — assuming crash.")
+                return True
             return False
         return state != StartupState.CLOSED_CLEANLY
 

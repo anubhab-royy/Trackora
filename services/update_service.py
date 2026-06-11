@@ -54,7 +54,7 @@ class UpdateService:
               Defaults to "yourusername/trackora".
     """
 
-    def __init__(self, repo: str = "yourusername/trackora") -> None:
+    def __init__(self, repo: str = "anomalyco/trackora") -> None:
         self._repo = repo
         self._update_info: Optional[UpdateInfo] = None
 

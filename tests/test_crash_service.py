@@ -90,10 +90,10 @@ class TestStartupStateManagerCorruptedFile:
         mgr.state_path.write_text("not json", encoding="utf-8")
         assert mgr.read_state() is None
 
-    def test_corrupted_json_detect_returns_false(self, tmp_path):
+    def test_corrupted_json_detect_returns_true(self, tmp_path):
         mgr = StartupStateManager(storage_dir=tmp_path)
         mgr.state_path.write_text("not json", encoding="utf-8")
-        assert mgr.detect_crash() is False
+        assert mgr.detect_crash() is True
 
     def test_empty_file_returns_none(self, tmp_path):
         mgr = StartupStateManager(storage_dir=tmp_path)

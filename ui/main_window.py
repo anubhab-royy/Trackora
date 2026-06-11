@@ -376,34 +376,37 @@ class MainWindow(QMainWindow):
 
     def _check_for_crashes(self) -> None:
         """Check if the previous session crashed and prompt the user."""
-        active: list[dict[str, Any]] = []
-        tracked = 0
-        was_tracking = False
-        if self._tracking_state is not None:
-            for session in self._tracking_state.active_sessions.values():
-                active.append({
-                    "game_id": session.game_id,
-                    "game_name": session.game_name,
-                    "process_id": session.process_id,
-                })
-            tracked = len(self._tracking_state.tracked_games)
-            was_tracking = self._tracking_state.is_running
+        try:
+            active: list[dict[str, Any]] = []
+            tracked = 0
+            was_tracking = False
+            if self._tracking_state is not None:
+                for session in self._tracking_state.active_sessions.values():
+                    active.append({
+                        "game_id": session.game_id,
+                        "game_name": session.game_name,
+                        "process_id": session.process_id,
+                    })
+                tracked = len(self._tracking_state.tracked_games)
+                was_tracking = self._tracking_state.is_running
 
-        result = self._crash_service.check_for_crash(
-            active_sessions=active,
-            tracked_games=tracked,
-            was_tracking=was_tracking,
-        )
-        if not result.has_crashed:
-            return
+            result = self._crash_service.check_for_crash(
+                active_sessions=active,
+                tracked_games=tracked,
+                was_tracking=was_tracking,
+            )
+            if not result.has_crashed:
+                return
 
-        dialog = CrashDialog(
-            report=result.report,
-            report_path=result.report_path,
-            github_service=self._github_service,
-            parent=self,
-        )
-        dialog.exec()
+            dialog = CrashDialog(
+                report=result.report,
+                report_path=result.report_path,
+                github_service=self._github_service,
+                parent=self,
+            )
+            dialog.exec()
+        except Exception as exc:
+            logger.error("Crash check failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Announcements URL

@@ -63,13 +63,6 @@ CREATE TABLE IF NOT EXISTS settings (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS statistics_cache (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    game_id        INTEGER,
-    period_type    TEXT,
-    period_key     TEXT,
-    value_seconds  INTEGER
-);
 """
 
 
