@@ -1,7 +1,8 @@
-"""SupportService — architecture interface for support operations.
+"""
+SupportService — orchestrates support operations.
 
-Current implementation uses in-memory storage.
-Future iterations will integrate with GitHub API for issue tracking.
+Stores submissions locally, submits to GitHub via GitHubIssueService,
+and queues failed submissions for retry via ReportQueueService.
 """
 
 from __future__ import annotations
@@ -25,11 +26,53 @@ class UpcomingUpdate:
     is_published: bool = False
 
 
+@dataclass
+class SupportSubmitResult:
+    """Result of a support submission.
+
+    Attributes:
+        local_stored:   True when the report was persisted in memory.
+        github_success: True when the report was also submitted to GitHub.
+        github_url:     URL of the created GitHub issue (if applicable).
+        github_error:   Error message if GitHub submission failed.
+        queued:         True when the report was queued for offline retry.
+        queued_path:    Path to the queued JSON file (if applicable).
+    """
+    local_stored: bool
+    github_success: bool = False
+    github_url: str | None = None
+    github_error: str | None = None
+    queued: bool = False
+    queued_path: str | None = None
+
+    @property
+    def success(self) -> bool:
+        """Overall success — local storage always counts."""
+        return self.local_stored
+
+
+# Errors that should NOT be queued for retry (configuration issues).
+_NON_RETRYABLE_KEYWORDS = [
+    "not configured",
+    "authentication failed",
+    "not found",
+    "check your",
+]
+
+
+def _is_retryable(error_message: str | None) -> bool:
+    """Return True if the GitHub error is transient and worth retrying."""
+    if error_message is None:
+        return False
+    lower = error_message.lower()
+    return not any(kw in lower for kw in _NON_RETRYABLE_KEYWORDS)
+
+
 class SupportService:
     """Service interface for support center operations.
 
-    Current: in-memory storage with stub methods.
-    Future: GitHub API issue creation and retrieval.
+    Stores submissions in memory, optionally forwards them
+    to GitHub Issues, and queues failed submissions for retry.
 
     Architecture rules:
     - No UI imports.
@@ -37,40 +80,207 @@ class SupportService:
     - Returns typed domain models and DTOs.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        github_service: object | None = None,
+        queue_service: object | None = None,
+    ) -> None:
+        self._github_service = github_service
+        self._queue_service = queue_service
         self._bug_reports: list[BugReport] = []
         self._feature_requests: list[FeatureRequest] = []
         self._feedback_reports: list[FeedbackReport] = []
 
-    def submit_bug_report(self, report: BugReport) -> bool:
-        """Store a bug report.
+    def submit_bug_report(self, report: BugReport) -> SupportSubmitResult:
+        """Store and optionally submit a bug report.
 
-        Returns True when the report is accepted.
+        Returns SupportSubmitResult with local, GitHub, and queue status.
         """
         report.id = str(uuid4())
         self._bug_reports.append(report)
-        logger.info("Bug report stored: %s", report.title)
-        return True
+        logger.info("Bug report stored locally: %s", report.title)
 
-    def submit_feature_request(self, request: FeatureRequest) -> bool:
-        """Store a feature request.
+        return self._submit_with_github_and_queue(
+            "submit_bug", report,
+            self._serialize_bug_report(report),
+        )
 
-        Returns True when the request is accepted.
-        """
+    def submit_feature_request(
+        self, request: FeatureRequest
+    ) -> SupportSubmitResult:
+        """Store and optionally submit a feature request."""
         request.id = str(uuid4())
         self._feature_requests.append(request)
-        logger.info("Feature request stored: %s", request.title)
-        return True
+        logger.info("Feature request stored locally: %s", request.title)
 
-    def submit_feedback(self, feedback: FeedbackReport) -> bool:
-        """Store a feedback submission.
+        return self._submit_with_github_and_queue(
+            "submit_feature", request,
+            self._serialize_feature_request(request),
+        )
 
-        Returns True when the feedback is accepted.
-        """
+    def submit_feedback(self, feedback: FeedbackReport) -> SupportSubmitResult:
+        """Store and optionally submit feedback."""
         feedback.id = str(uuid4())
         self._feedback_reports.append(feedback)
-        logger.info("Feedback stored: %s", feedback.subject)
-        return True
+        logger.info("Feedback stored locally: %s", feedback.subject)
+
+        return self._submit_with_github_and_queue(
+            "submit_feedback", feedback,
+            self._serialize_feedback(feedback),
+        )
+
+    def process_queue(self) -> object | None:
+        """Process the offline report queue.
+
+        Returns QueueProcessResult from the queue service,
+        or None if no queue service is configured.
+        """
+        if self._queue_service is None:
+            logger.info("No queue service configured, skipping queue processing.")
+            return None
+        return self._queue_service.process_queue(self._queue_submit_fn())
+
+    # ------------------------------------------------------------------
+    # Internal: GitHub + queue orchestration
+    # ------------------------------------------------------------------
+
+    def _submit_with_github_and_queue(
+        self, github_method: str,
+        model: object,
+        serialized: dict[str, object],
+    ) -> SupportSubmitResult:
+        github_success, github_url, github_error = self._try_github_submit(
+            github_method, model
+        )
+
+        queued = False
+        queued_path = None
+
+        if not github_success and _is_retryable(github_error):
+            result = self._try_queue_report(self._report_type(github_method), serialized)
+            if result is not None:
+                queued = True
+                queued_path = str(result)
+
+        return SupportSubmitResult(
+            local_stored=True,
+            github_success=github_success,
+            github_url=github_url,
+            github_error=github_error,
+            queued=queued,
+            queued_path=queued_path,
+        )
+
+    def _try_github_submit(
+        self, method: str, model: object
+    ) -> tuple[bool, str | None, str | None]:
+        """Attempt to forward a submission to GitHub.
+
+        Returns (success, url, error_message).
+        """
+        if self._github_service is None:
+            return False, None, None
+        try:
+            method_fn = getattr(self._github_service, method, None)
+            if method_fn is None:
+                logger.warning("GitHub service missing method: %s", method)
+                return False, None, None
+            result = method_fn(model)
+            if result.success:
+                logger.info("GitHub issue created: %s", result.issue_url)
+                return True, result.issue_url, None
+            logger.warning("GitHub submission failed: %s", result.error_message)
+            return False, None, result.error_message
+        except Exception as exc:
+            logger.exception("GitHub submission error: %s", exc)
+            return False, None, str(exc)
+
+    def _try_queue_report(
+        self, report_type: str, data: dict[str, object]
+    ) -> object | None:
+        """Attempt to queue a report for offline retry."""
+        if self._queue_service is None:
+            return None
+        try:
+            return self._queue_service.save_report(report_type, data)
+        except Exception as exc:
+            logger.exception("Failed to queue report: %s", exc)
+            return None
+
+    def _queue_submit_fn(self):
+        """Return a callable for QueueProcessService to submit queued reports."""
+        github = self._github_service
+
+        def submit(report_type: str, data: dict) -> bool:
+            if github is None:
+                return False
+            method_name = _GITHUB_METHOD_MAP.get(report_type)
+            if method_name is None:
+                return False
+            model = _reconstruct_model(report_type, data)
+            if model is None:
+                return False
+            try:
+                method_fn = getattr(github, method_name, None)
+                if method_fn is None:
+                    return False
+                result = method_fn(model)
+                return bool(result.success)
+            except Exception:
+                logger.exception("Error submitting queued %s report", report_type)
+                return False
+
+        return submit
+
+    # ------------------------------------------------------------------
+    # Serialization helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _serialize_bug_report(report: BugReport) -> dict[str, object]:
+        return {
+            "title": report.title,
+            "description": report.description,
+            "steps_to_reproduce": report.steps_to_reproduce,
+            "expected_behavior": report.expected_behavior,
+            "actual_behavior": report.actual_behavior,
+            "severity": report.severity,
+        }
+
+    @staticmethod
+    def _serialize_feature_request(
+        request: FeatureRequest,
+    ) -> dict[str, object]:
+        return {
+            "title": request.title,
+            "description": request.description,
+            "use_case": request.use_case,
+            "priority": request.priority,
+        }
+
+    @staticmethod
+    def _serialize_feedback(
+        feedback: FeedbackReport,
+    ) -> dict[str, object]:
+        return {
+            "subject": feedback.subject,
+            "message": feedback.message,
+            "category": feedback.category,
+            "contact_ok": feedback.contact_ok,
+        }
+
+    @staticmethod
+    def _report_type(github_method: str) -> str:
+        mapping = {
+            "submit_bug": "bug",
+            "submit_feature": "feature",
+            "submit_feedback": "feedback",
+        }
+        return mapping.get(github_method, "unknown")
+
+    # ------------------------------------------------------------------
+    # Upcoming updates (static roadmap)
+    # ------------------------------------------------------------------
 
     def get_upcoming_updates(self) -> list[UpcomingUpdate]:
         """Return a list of planned or published updates."""
@@ -85,7 +295,13 @@ class SupportService:
                 title="GitHub Integration",
                 description="Submit bug reports and feature requests directly to GitHub Issues.",
                 version="1.2.0",
-                is_published=False,
+                is_published=True,
+            ),
+            UpcomingUpdate(
+                title="Offline Report Queue",
+                description="Reports are saved locally when offline and auto-submitted on next launch.",
+                version="1.2.0",
+                is_published=True,
             ),
             UpcomingUpdate(
                 title="Enhanced Statistics Export",
@@ -94,3 +310,35 @@ class SupportService:
                 is_published=False,
             ),
         ]
+
+
+# Module-level helper for reconstructing models during queue processing.
+
+
+_REPORT_TYPE_CLS_MAP: dict[str, type] = {
+    "bug": BugReport,
+    "feature": FeatureRequest,
+    "feedback": FeedbackReport,
+}
+
+_GITHUB_METHOD_MAP: dict[str, str] = {
+    "bug": "submit_bug",
+    "feature": "submit_feature",
+    "feedback": "submit_feedback",
+}
+
+
+def _reconstruct_model(
+    report_type: str, data: dict
+) -> BugReport | FeatureRequest | FeedbackReport | None:
+    """Reconstruct a domain model from queued JSON data."""
+    cls = _REPORT_TYPE_CLS_MAP.get(report_type)
+    if cls is None:
+        return None
+    try:
+        return cls(**data)
+    except (TypeError, ValueError) as exc:
+        logger.error(
+            "Failed to reconstruct %s model: %s", report_type, exc
+        )
+        return None
