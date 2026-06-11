@@ -33,6 +33,7 @@ class IssueType(Enum):
     BUG = "bug"
     FEATURE = "feature-request"
     FEEDBACK = "feedback"
+    CRASH = "crash"
 
 
 @dataclass
