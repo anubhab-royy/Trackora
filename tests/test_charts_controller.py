@@ -15,13 +15,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from gametracker_stats.models import (
+from trackora_stats.models import (
     DailyActivity,
     MonthlyActivity,
     GamePlaytimeSummary,
 )
-from gametracker_stats.playtime_calculator import PlaytimeCalculator
-from gametracker_stats.statistics_service import StatisticsService
+from trackora_stats.playtime_calculator import PlaytimeCalculator
+from trackora_stats.statistics_service import StatisticsService
 
 
 # ===========================================================================
@@ -81,7 +81,7 @@ class TestCalculatorChartMethods:
         calc = PlaytimeCalculator(mock_sessions, mock_games)
 
         from unittest.mock import patch
-        with patch("gametracker_stats.playtime_calculator.date") as mock_date:
+        with patch("trackora_stats.playtime_calculator.date") as mock_date:
             mock_date.today.return_value = TODAY
             mock_date.side_effect = lambda *args, **kw: date(*args, **kw)
             result = calc.get_daily_activity(days=3)
@@ -99,7 +99,7 @@ class TestCalculatorChartMethods:
         calc = PlaytimeCalculator(mock_sessions, mock_games)
 
         from unittest.mock import patch
-        with patch("gametracker_stats.playtime_calculator.date") as mock_date:
+        with patch("trackora_stats.playtime_calculator.date") as mock_date:
             mock_date.today.return_value = TODAY
             mock_date.side_effect = lambda *args, **kw: date(*args, **kw)
             result = calc.get_daily_activity(days=7)
@@ -124,7 +124,7 @@ class TestCalculatorChartMethods:
         calc = PlaytimeCalculator(mock_sessions, mock_games)
         # Need to patch date.today()
         from unittest.mock import patch
-        with patch("gametracker_stats.playtime_calculator.date") as mock_date:
+        with patch("trackora_stats.playtime_calculator.date") as mock_date:
             mock_date.today.return_value = TODAY
             mock_date.side_effect = lambda *args, **kw: date(*args, **kw)
             result = calc.get_monthly_activity(months=3)
@@ -144,7 +144,7 @@ class TestCalculatorChartMethods:
 
         calc = PlaytimeCalculator(mock_sessions, mock_games)
         from unittest.mock import patch
-        with patch("gametracker_stats.playtime_calculator.date") as mock_date:
+        with patch("trackora_stats.playtime_calculator.date") as mock_date:
             mock_date.today.return_value = TODAY
             mock_date.side_effect = lambda *args, **kw: date(*args, **kw)
             result = calc.get_monthly_activity(months=3)
@@ -166,7 +166,7 @@ class TestServiceChartMethods:
 
         svc = StatisticsService(mock_sessions, mock_games)
         from unittest.mock import patch
-        with patch("gametracker_stats.playtime_calculator.date") as mock_date:
+        with patch("trackora_stats.playtime_calculator.date") as mock_date:
             mock_date.today.return_value = TODAY
             mock_date.side_effect = lambda *args, **kw: date(*args, **kw)
             result = svc.get_daily_activity(days=7)
@@ -180,7 +180,7 @@ class TestServiceChartMethods:
 
         svc = StatisticsService(mock_sessions, mock_games)
         from unittest.mock import patch
-        with patch("gametracker_stats.playtime_calculator.date") as mock_date:
+        with patch("trackora_stats.playtime_calculator.date") as mock_date:
             mock_date.today.return_value = TODAY
             mock_date.side_effect = lambda *args, **kw: date(*args, **kw)
             result = svc.get_monthly_activity(months=6)

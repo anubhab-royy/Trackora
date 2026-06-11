@@ -1,6 +1,6 @@
-# GameTracker Clean Windows Installation Guide
+# Trackora Clean Windows Installation Guide
 
-This guide walks you through installing GameTracker on a **clean Windows 10/11** system that has no Python or developer tools installed.
+This guide walks you through installing Trackora on a **clean Windows 10/11** system that has no Python or developer tools installed.
 
 ---
 
@@ -16,38 +16,38 @@ Your Windows system needs only:
 ### Installation Steps
 
 1. **Download the installer**
-   - Go to the [Releases page](https://github.com/yourusername/gametracker/releases)
-   - Download `GameTracker-Setup-1.0.0.exe`
+   - Go to the [Releases page](https://github.com/yourusername/Trackora/releases)
+   - Download `Trackora-Setup-1.0.0.exe`
 
 2. **Run the installer**
-   - Double-click `GameTracker-Setup-1.0.0.exe`
+   - Double-click `Trackora-Setup-1.0.0.exe`
    - If Windows Defender shows a warning, click **More info** → **Run anyway**
      - *(This happens because the executable is not yet code-signed. See the code signing section below.)*
    - Follow the installation wizard:
-     - Accept the default installation directory (`C:\Program Files\GameTracker`)
+     - Accept the default installation directory (`C:\Program Files\Trackora`)
      - Optionally check **Create a desktop shortcut**
-     - Optionally check **Start GameTracker when Windows starts**
+     - Optionally check **Start Trackora when Windows starts**
    - Click **Install**
 
-3. **Launch GameTracker**
-   - After installation, check **Launch GameTracker** and click **Finish**
-   - Or launch from the **Start Menu** → **GameTracker**
+3. **Launch Trackora**
+   - After installation, check **Launch Trackora** and click **Finish**
+   - Or launch from the **Start Menu** → **Trackora**
 
 4. **Verify it's running**
    - The main window should appear with your statistics dashboard
-   - A GameTracker icon appears in the **system tray** (near the clock)
+   - A Trackora icon appears in the **system tray** (near the clock)
    - Right-click the tray icon to access the menu
 
 ### Runtime Data Locations
 
 | Data | Windows Path |
 |------|--------------|
-| Database | `%APPDATA%\GameTracker\gametracker.db` |
-| Logs | `%APPDATA%\GameTracker\logs\game_tracker.log` |
+| Database | `%APPDATA%\Trackora\Trackora.db` |
+| Logs | `%APPDATA%\Trackora\logs\trackora.log` |
 
 Your data is stored in your user folder, not in the Program Files directory. This means:
 - Data survives application updates
-- Data survives uninstallation (if you want to remove it, delete the `%APPDATA%\GameTracker` folder manually)
+- Data survives uninstallation (if you want to remove it, delete the `%APPDATA%\Trackora` folder manually)
 - Different Windows users have separate data
 
 ---
@@ -56,7 +56,7 @@ Your data is stored in your user folder, not in the Program Files directory. Thi
 
 If you prefer not to use the installer:
 
-1. Download `GameTracker.exe` from the [Releases page](https://github.com/yourusername/gametracker/releases)
+1. Download `Trackora.exe` from the [Releases page](https://github.com/yourusername/Trackora/releases)
 2. Place it anywhere (Desktop, a folder, USB drive)
 3. Double-click to run
 4. No installation required
@@ -84,8 +84,8 @@ If you want to run from source code:
 python --version
 
 # 3. Clone the repository
-git clone https://github.com/yourusername/gametracker.git
-cd gametracker
+git clone https://github.com/yourusername/Trackora.git
+cd Trackora
 
 # 4. Create and activate a virtual environment
 python -m venv .venv
@@ -94,8 +94,8 @@ python -m venv .venv
 # 5. Install dependencies
 pip install -r requirements.txt
 
-# 6. Run GameTracker
-python -m gametracker
+# 6. Run Trackora
+python -m Trackora
 ```
 
 ### Building the Executable
@@ -105,23 +105,23 @@ python -m gametracker
 pip install pyinstaller
 
 # Build
-pyinstaller GameTracker.spec
+pyinstaller Trackora.spec
 
-# Output: dist\GameTracker.exe
+# Output: dist\Trackora.exe
 ```
 
 ### Building the Installer
 
 ```powershell
 # Requires Inno Setup 6+ (https://jrsoftware.org/isdl.php)
-iscc installer\GameTracker.iss
+iscc installer\Trackora.iss
 ```
 
 ---
 
 ## Managing Windows Defender
 
-Since GameTracker is built with PyInstaller, Windows Defender may initially flag it. This is a known false positive common to all PyInstaller-packaged applications.
+Since Trackora is built with PyInstaller, Windows Defender may initially flag it. This is a known false positive common to all PyInstaller-packaged applications.
 
 ### To resolve:
 
@@ -130,7 +130,7 @@ Since GameTracker is built with PyInstaller, Windows Defender may initially flag
 2. Click **Manage settings** under "Virus & threat protection settings"
 3. Scroll to **Exclusions** → **Add or remove exclusions**
 4. Click **Add an exclusion** → **Folder**
-5. Select `C:\Program Files\GameTracker` (or wherever you installed)
+5. Select `C:\Program Files\Trackora` (or wherever you installed)
 
 **Option B: Code sign the executable (permanent)**
 - See the [Code signing guide](../scripts/sign-code.ps1)
@@ -138,20 +138,20 @@ Since GameTracker is built with PyInstaller, Windows Defender may initially flag
 
 **Option C: Submit to Microsoft**
 - Visit https://www.microsoft.com/en-us/wdsi/filesubmission
-- Upload `GameTracker.exe` to report it as a false positive
+- Upload `Trackora.exe` to report it as a false positive
 - Microsoft will whitelist it after review
 
 ---
 
-## Updating GameTracker
+## Updating Trackora
 
 ### Via the installer
-1. Download the new `GameTracker-Setup-X.X.X.exe`
+1. Download the new `Trackora-Setup-X.X.X.exe`
 2. Run it — it will automatically upgrade your existing installation
-3. Your data in `%APPDATA%\GameTracker` is preserved
+3. Your data in `%APPDATA%\Trackora` is preserved
 
 ### Via the standalone executable
-1. Download the new `GameTracker.exe`
+1. Download the new `Trackora.exe`
 2. Replace the old one
 3. Restart the application
 
@@ -173,22 +173,22 @@ Since GameTracker is built with PyInstaller, Windows Defender may initially flag
 - Run as normal user (not administrator)
 
 ### "Logs folder could not be created"
-- Same as above — `%APPDATA%\GameTracker\logs` must be writable
+- Same as above — `%APPDATA%\Trackora\logs` must be writable
 
 ### Application does not appear in system tray
 - Some systems hide tray icons by default
 - Click the **^** arrow near the clock to see hidden icons
-- Drag the GameTracker icon to the visible area if desired
+- Drag the Trackora icon to the visible area if desired
 
 ### Uninstalling
-- **Via installer**: Settings → Apps → Apps & features → GameTracker → Uninstall
-- **Portable**: Delete the executable and `%APPDATA%\GameTracker` folder
+- **Via installer**: Settings → Apps → Apps & features → Trackora → Uninstall
+- **Portable**: Delete the executable and `%APPDATA%\Trackora` folder
 
 ---
 
 ## Windows Clean Install Prerequisites Checklist
 
-Before installing GameTracker, your Windows system needs:
+Before installing Trackora, your Windows system needs:
 
 | Requirement | Status | Action If Missing |
 |-------------|--------|-------------------|
@@ -200,10 +200,10 @@ Before installing GameTracker, your Windows system needs:
 
 ### Visual C++ Redistributable
 
-If GameTracker fails to start with a "DLL not found" error:
+If Trackora fails to start with a "DLL not found" error:
 
 1. Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe
 2. Run the installer
-3. Restart GameTracker
+3. Restart Trackora
 
 This is a one-time requirement — many applications already include it.

@@ -1,6 +1,6 @@
 """
 LoggingService — Phase 9
-Daily rotating log files for GameTracker.
+Daily rotating log files for Trackora.
 
 Log file format:
     logs/YYYY-MM-DD.log
@@ -23,7 +23,7 @@ from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
-from gametracker import __version__
+from trackora import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -34,15 +34,15 @@ _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 def _get_default_log_dir() -> Path:
     """Return a platform-appropriate log directory.
 
-    On Windows:  %APPDATA%/GameTracker/logs/
-    On Linux:     ~/.local/share/GameTracker/logs/
+    On Windows:  %APPDATA%/Trackora/logs/
+    On Linux:     ~/.local/share/Trackora/logs/
     When frozen:  same as above (never next to the executable).
     """
     if os.name == "nt":
         base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
     else:
         base = Path.home() / ".local" / "share"
-    return base / "GameTracker" / "logs"
+    return base / "Trackora" / "logs"
 
 
 _DEFAULT_LOG_DIR = _get_default_log_dir()
@@ -86,7 +86,7 @@ class LoggingService:
 
         log_dir.mkdir(parents=True, exist_ok=True)
 
-        log_file = log_dir / "game_tracker.log"
+        log_file = log_dir / "trackora.log"
         handler = TimedRotatingFileHandler(
             filename=str(log_file),
             when="midnight",

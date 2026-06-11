@@ -1,7 +1,7 @@
 # Session dataclass + factory
 
 """
-Session model for GameTracker.
+Session model for Trackora.
 
 Maps directly to the `sessions` table defined in database_schema.md.
 """

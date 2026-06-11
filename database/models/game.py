@@ -1,7 +1,7 @@
 # Game dataclass
 
 """
-Game model for GameTracker.
+Game model for Trackora.
 
 Maps directly to the `games` table defined in database_schema.md.
 """

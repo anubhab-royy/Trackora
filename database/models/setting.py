@@ -1,7 +1,7 @@
 # Setting dataclass + bool/int
 
 """
-Setting model for GameTracker.
+Setting model for Trackora.
 
 Maps directly to the `settings` table defined in database_schema.md.
 

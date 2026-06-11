@@ -26,13 +26,13 @@ VSVersionInfo(
       [
         StringTable(
           u'040904B0',
-          [StringStruct(u'CompanyName', u'GameTracker'),
-           StringStruct(u'FileDescription', u'GameTracker - Automatic Gaming Session Tracker'),
+           [StringStruct(u'CompanyName', u'Trackora'),
+           StringStruct(u'FileDescription', u'Trackora - Automatic Gaming Session Tracker'),
            StringStruct(u'FileVersion', u'1.0.0'),
-           StringStruct(u'InternalName', u'GameTracker'),
-           StringStruct(u'LegalCopyright', u'Copyright (c) 2026 GameTracker. All rights reserved.'),
-           StringStruct(u'OriginalFilename', u'GameTracker.exe'),
-           StringStruct(u'ProductName', u'GameTracker'),
+           StringStruct(u'InternalName', u'Trackora'),
+           StringStruct(u'LegalCopyright', u'Copyright (c) 2026 Trackora. All rights reserved.'),
+           StringStruct(u'OriginalFilename', u'Trackora.exe'),
+           StringStruct(u'ProductName', u'Trackora'),
            StringStruct(u'ProductVersion', u'1.0.0')])
       ]),
     VarFileInfo([VarStruct(u'Translation', [0x0409, 0x04B0])])

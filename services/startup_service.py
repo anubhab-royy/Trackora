@@ -1,6 +1,6 @@
 """
 StartupService — Phase 9
-Manages automatic startup for GameTracker.
+Manages automatic startup for Trackora.
 
 Windows: Uses HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run.
 Linux:   Uses $HOME/.config/autostart/*.desktop file (XDG spec).
@@ -28,7 +28,7 @@ _AUTOSTART_DIR = Path.home() / ".config" / "autostart"
 _DESKTOP_FILE_TEMPLATE = """\
 [Desktop Entry]
 Type=Application
-Name=GameTracker
+Name=Trackora
 Exec={executable}
 Terminal=false
 X-GNOME-Autostart-enabled=true
@@ -65,7 +65,7 @@ class StartupService:
     @staticmethod
     def is_registered() -> bool:
         """
-        Return True if GameTracker is registered to start automatically.
+        Return True if Trackora is registered to start automatically.
 
         Returns False on unsupported platforms or if registration is missing.
         """
@@ -79,7 +79,7 @@ class StartupService:
     @staticmethod
     def register() -> bool:
         """
-        Register GameTracker to start automatically on login.
+        Register Trackora to start automatically on login.
 
         Returns:
             True if registration succeeded (or was already registered).
@@ -96,7 +96,7 @@ class StartupService:
     @staticmethod
     def unregister() -> bool:
         """
-        Remove GameTracker from auto-start.
+        Remove Trackora from auto-start.
 
         Returns:
             True if unregistration succeeded (or was not registered).
@@ -116,7 +116,7 @@ class StartupService:
 # ---------------------------------------------------------------------------
 
 _REG_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-_REG_VALUE = "GameTracker"
+_REG_VALUE = "Trackora"
 
 
 def _windows_is_registered() -> bool:
@@ -163,7 +163,7 @@ def _windows_unregister() -> bool:
 # Linux implementation (XDG autostart .desktop file)
 # ---------------------------------------------------------------------------
 
-_DESKTOP_FILE = _AUTOSTART_DIR / "GameTracker.desktop"
+_DESKTOP_FILE = _AUTOSTART_DIR / "Trackora.desktop"
 
 
 def _linux_is_registered() -> bool:

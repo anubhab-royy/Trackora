@@ -41,7 +41,7 @@ from services.export_service import ExportService
 from services.game_service import GameService
 from services.session_history_service import SessionHistoryService
 from services.tray_service import TrayService
-from gametracker_stats.statistics_service import StatisticsService
+from trackora_stats.statistics_service import StatisticsService
 from ui.dashboard.dashboard_controller import DashboardController
 from ui.dashboard.dashboard_widget import DashboardWidget
 from ui.games.games_controller import GamesController
@@ -89,7 +89,7 @@ class MainWindow(QMainWindow):
         self._active_repo = active_sessions_repo
         self._games_repo = games_repo
 
-        self.setWindowTitle("GameTracker")
+        self.setWindowTitle("Trackora")
         self.setMinimumSize(1000, 650)
         self.resize(1200, 750)
 
@@ -121,7 +121,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(0)
 
-        title = QLabel("GameTracker")
+        title = QLabel("Trackora")
         title.setObjectName("AppTitle")
         sidebar_layout.addWidget(title)
 
@@ -271,7 +271,7 @@ class MainWindow(QMainWindow):
     def export_json(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self, "Backup to JSON",
-            str(Path.home() / "gametracker_backup.json"),
+            str(Path.home() / "trackora_backup.json"),
             "JSON Files (*.json)",
         )
         if not path:

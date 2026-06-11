@@ -98,7 +98,7 @@ class SettingsController:
         path, _ = QFileDialog.getSaveFileName(
             self._parent_widget,
             "Backup to JSON",
-            str(Path.home() / "gametracker_backup.json"),
+            str(Path.home() / "trackora_backup.json"),
             "JSON Files (*.json)",
         )
         if not path:

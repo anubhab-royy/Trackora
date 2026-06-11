@@ -1,4 +1,4 @@
-# GameTracker Architecture
+# Trackora Architecture
 
 Version: 1.0
 
@@ -6,7 +6,7 @@ Version: 1.0
 
 # System Overview
 
-GameTracker consists of five major layers:
+Trackora consists of five major layers:
 
 1. Tracking Layer
 2. Database Layer

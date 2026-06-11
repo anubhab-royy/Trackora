@@ -1,4 +1,4 @@
-# GameTracker v1.0.0
+# Trackora v1.0.0
 
 A lightweight, privacy-first desktop application that automatically tracks your gaming sessions and provides detailed analytics. Runs silently in the system tray with minimal resource usage.
 
@@ -25,45 +25,45 @@ A lightweight, privacy-first desktop application that automatically tracks your 
 
 ### Windows Installer (Recommended)
 
-Download the latest installer from the [Releases](https://github.com/yourusername/gametracker/releases) page.
+Download the latest installer from the [Releases](https://github.com/yourusername/trackora/releases) page.
 
-1. Run `GameTracker-Setup-1.0.0.exe`
+1. Run `Trackora-Setup-1.0.0.exe`
 2. Follow the installation wizard
-3. Launch GameTracker from the Start Menu
+3. Launch Trackora from the Start Menu
 
 ### Portable Executable (Windows)
 
-Download `GameTracker.exe` from the Releases page and run it directly.
+Download `Trackora.exe` from the Releases page and run it directly.
 
 ### Development Installation
 
 ```bash
-git clone https://github.com/yourusername/gametracker.git
-cd gametracker
+git clone https://github.com/yourusername/trackora.git
+cd trackora
 python -m venv .venv
 # Windows:
 .venv\Scripts\activate
 # Linux/macOS:
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m gametracker
+python -m trackora
 ```
 
 ## Runtime Data Locations
 
-When packaged, GameTracker stores its data at:
+When packaged, Trackora stores its data at:
 
-| Data        | Windows Path                                  |
-|-------------|-----------------------------------------------|
-| Database    | `%APPDATA%\GameTracker\gametracker.db`        |
-| Logs        | `%APPDATA%\GameTracker\logs\`                 |
+| Data        | Windows Path                               |
+|-------------|--------------------------------------------|
+| Database    | `%APPDATA%\Trackora\trackora.db`           |
+| Logs        | `%APPDATA%\Trackora\logs\`                 |
 
-No data is stored in the installation directory. Uninstalling GameTracker will leave your data intact.
+No data is stored in the installation directory. Uninstalling Trackora will leave your data intact.
 
 ## Usage
 
 ```bash
-python -m gametracker
+python -m trackora
 ```
 
 Or run the installed executable from the Start Menu.
@@ -75,7 +75,7 @@ See [BUILD.md](BUILD.md) for detailed build instructions for PyInstaller executa
 ## Project Structure
 
 ```
-gametracker/
+trackora/
 ├── database/              # Database layer
 │   ├── database_manager.py
 │   ├── models/            # Data models
@@ -85,7 +85,7 @@ gametracker/
 │   ├── session_manager.py
 │   ├── recovery_manager.py
 │   └── tracking_state.py
-├── statistics/            # Statistics engine
+├── trackora_stats/        # Statistics engine
 │   ├── statistics_service.py
 │   ├── playtime_calculator.py
 │   └── trend_analyzer.py
@@ -107,7 +107,7 @@ gametracker/
 ├── tests/                 # Pytest test suite
 ├── docs/                  # Documentation
 ├── installer/             # Inno Setup installer scripts
-├── GameTracker.spec       # PyInstaller spec file
+├── Trackora.spec          # PyInstaller spec file
 ├── BUILD.md               # Build instructions
 ├── requirements.txt
 └── README.md
@@ -120,17 +120,17 @@ gametracker/
 python -m pytest
 
 # With coverage
-python -m pytest --cov=gametracker --cov-report=term-missing
+python -m pytest --cov=trackora --cov-report=term-missing
 ```
 
 ### Packaging for Distribution
 
 ```bash
 # Build executable
-pyinstaller GameTracker.spec
+pyinstaller Trackora.spec
 
 # Create installer (requires Inno Setup)
-iscc installer/GameTracker.iss
+iscc installer/Trackora.iss
 ```
 
 ## License

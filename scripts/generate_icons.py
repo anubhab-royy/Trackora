@@ -1,4 +1,4 @@
-"""Generate GameTracker application icons (PNG + ICO)."""
+"""Generate Trackora application icons (PNG + ICO)."""
 
 from __future__ import annotations
 

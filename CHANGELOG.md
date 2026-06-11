@@ -1,6 +1,17 @@
 # Changelog
 
-## [1.0.0] — 2026-06-09
+## [1.0.0] — 2026-06-11
+
+### Changed
+- **Project renamed from GameTracker to Trackora**
+- All source code, imports, and module paths updated to Trackora
+- Application executable renamed to `Trackora.exe`
+- Window title, tray tooltip, and about dialog updated to Trackora
+- Database path changed to `%APPDATA%\Trackora\trackora.db`
+- Log file path changed to `%APPDATA%\Trackora\logs\trackora.log`
+- Windows registry and autostart entries use Trackora naming
+- GitHub repository references updated to `yourusername/trackora`
+- All documentation and build instructions updated
 
 ### Added
 - Initial production release
@@ -22,3 +33,13 @@
 - APPDATA-safe runtime paths for database and logs
 - Application icons in PNG and multi-resolution ICO
 - Windows VERSIONINFO resource metadata
+
+## [0.9.0] — 2026-05-01
+
+### Added
+- Beta release under original GameTracker name
+- Core tracking engine and statistics layer
+- All UI views: dashboard, games, history, charts, settings
+- System tray integration and startup service
+- Export and backup functionality
+- Theme management with dark/light mode

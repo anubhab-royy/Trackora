@@ -15,7 +15,7 @@ from datetime import datetime
 from database.repositories.active_sessions_repository import ActiveSessionsRepository
 from database.repositories.games_repository import GamesRepository
 from services.formatting import format_duration
-from gametracker_stats.statistics_service import StatisticsService
+from trackora_stats.statistics_service import StatisticsService
 
 logger = logging.getLogger(__name__)
 

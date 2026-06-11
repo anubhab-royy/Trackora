@@ -1,4 +1,4 @@
-# GameTracker Packaging Report
+# Trackora Packaging Report
 
 **Version:** 1.0.0
 **Date:** 2026-06-09
@@ -13,9 +13,9 @@
 | `ui/icons/app_icon.png` | 256x256 application PNG icon |
 | `ui/icons/app_icon.ico` | Multi-resolution ICO (16×16 to 256×256) |
 | `ui/icons/tray_icon.png` | 22x22 system tray icon |
-| `GameTracker.spec` | PyInstaller spec file with all configuration |
+| `Trackora.spec` | PyInstaller spec file with all configuration |
 | `version_info.txt` | Windows VERSIONINFO resource with metadata |
-| `installer/GameTracker.iss` | Inno Setup installer script |
+| `installer/Trackora.iss` | Inno Setup installer script |
 | `scripts/generate_icons.py` | Icon generation script |
 | `docs/packaging-report.md` | This report |
 | `docs/build-verification-report.md` | Build verification report |
@@ -26,9 +26,9 @@
 
 | File | Change |
 |------|--------|
-| `gametracker/__init__.py` | Version updated from `1.0.0rc1` to `1.0.0` |
-| `gametracker/__main__.py` | Database path changed to `%APPDATA%/GameTracker/gametracker.db` |
-| `services/logging_service.py` | Log directory changed to `%APPDATA%/GameTracker/logs/` |
+| `Trackora/__init__.py` | Version updated from `1.0.0rc1` to `1.0.0` |
+| `Trackora/__main__.py` | Database path changed to `%APPDATA%/Trackora/Trackora.db` |
+| `services/logging_service.py` | Log directory changed to `%APPDATA%/Trackora/logs/` |
 | `BUILD.md` | Complete rewrite with correct build instructions |
 | `README.md` | Updated with production release info and runtime data paths |
 
@@ -52,28 +52,28 @@ The icons use a modern game controller design with Windows 11 styling.
 
 ## Runtime Paths
 
-### Database (`gametracker/__main__.py`)
+### Database (`Trackora/__main__.py`)
 
 | Environment | Path |
 |-------------|------|
-| Windows | `%APPDATA%\GameTracker\gametracker.db` |
-| Linux | `~/.gametracker/gametracker.db` |
-| Frozen (Windows) | `%APPDATA%\GameTracker\gametracker.db` |
+| Windows | `%APPDATA%\Trackora\Trackora.db` |
+| Linux | `~/.Trackora/Trackora.db` |
+| Frozen (Windows) | `%APPDATA%\Trackora\Trackora.db` |
 
 ### Logs (`services/logging_service.py`)
 
 | Environment | Path |
 |-------------|------|
-| Windows | `%APPDATA%\GameTracker\logs\game_tracker.log` |
-| Linux | `~/.local/share/GameTracker/logs/game_tracker.log` |
-| Frozen (Windows) | `%APPDATA%\GameTracker\logs\game_tracker.log` |
+| Windows | `%APPDATA%\Trackora\logs\trackora.log` |
+| Linux | `~/.local/share/Trackora/logs/trackora.log` |
+| Frozen (Windows) | `%APPDATA%\Trackora\logs\trackora.log` |
 
 ### Startup Service (`services/startup_service.py`)
 
 | Mechanism | Path |
 |-----------|------|
 | Windows Registry | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` |
-| Linux | `~/.config/autostart/GameTracker.desktop` |
+| Linux | `~/.config/autostart/Trackora.desktop` |
 
 No runtime data is stored in the installation directory.
 
@@ -83,20 +83,20 @@ No runtime data is stored in the installation directory.
 
 | Location | Value |
 |----------|-------|
-| `gametracker/__init__.py` | `1.0.0` |
-| `GameTracker.spec` | `1.0.0` |
+| `Trackora/__init__.py` | `1.0.0` |
+| `Trackora.spec` | `1.0.0` |
 | `version_info.txt` | `1.0.0` |
-| `installer/GameTracker.iss` | `1.0.0` |
+| `installer/Trackora.iss` | `1.0.0` |
 | `README.md` | v1.0.0 |
 
 ---
 
 ## Packaging Summary
 
-- **Build Method:** PyInstaller 6.20.0 via `GameTracker.spec`
-- **Entry Point:** `gametracker/__main__.py`
+- **Build Method:** PyInstaller 6.20.0 via `Trackora.spec`
+- **Entry Point:** `Trackora/__main__.py`
 - **Build Type:** `--onefile --windowed` (single file, no console)
-- **Output:** `dist/GameTracker.exe` (~69 MB)
+- **Output:** `dist/Trackora.exe` (~69 MB)
 - **Resources Bundled:** UI themes, icons
 - **Hidden Imports:** PyQt6.QtSvg, pyqtgraph, psutil, all package submodules
 - **Version Resource:** Embedded via `version_info.txt`

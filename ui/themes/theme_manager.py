@@ -1,6 +1,6 @@
 # ui/themes/theme_manager.py
 """
-Theme manager for GameTracker.
+Theme manager for Trackora.
 
 Provides dark and light theme stylesheets.
 No business logic. No database access.
@@ -74,7 +74,7 @@ def _build_stylesheet(p: dict[str, str]) -> str:
     """Build a complete Qt stylesheet from a palette dictionary."""
     return f"""
 /* ======================================================
-   GameTracker Theme Stylesheet
+   Trackora Theme Stylesheet
    ====================================================== */
 
 QWidget {{

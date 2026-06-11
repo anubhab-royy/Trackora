@@ -1,7 +1,7 @@
 # All SQL for `games` table
 
 """
-GamesRepository for GameTracker.
+GamesRepository for Trackora.
 
 All SQL operations for the `games` table live here and nowhere else.
 The UI layer must never call this repository directly.

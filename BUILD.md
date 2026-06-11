@@ -1,4 +1,4 @@
-# Building GameTracker
+# Building Trackora
 
 Build a standalone Windows executable using PyInstaller and create an installer with Inno Setup.
 
@@ -20,20 +20,20 @@ pip install pyinstaller
 
 ## Application Entry Point
 
-The entry point is `gametracker/__main__.py`, invoked as:
+The entry point is `trackora/__main__.py`, invoked as:
 
 ```bash
-python -m gametracker
+python -m trackora
 ```
 
-For PyInstaller builds the spec file (`GameTracker.spec`) targets this entry point directly.
+For PyInstaller builds the spec file (`Trackora.spec`) targets this entry point directly.
 
 ## PyInstaller Build
 
 ### Recommended Build (Spec File)
 
 ```bash
-pyinstaller GameTracker.spec
+pyinstaller Trackora.spec
 ```
 
 The spec file handles all hidden imports, data files, version metadata, and exclusions automatically.
@@ -42,7 +42,7 @@ The spec file handles all hidden imports, data files, version metadata, and excl
 
 ```bash
 pyinstaller --onefile --windowed `
-    --name "GameTracker" `
+    --name "Trackora" `
     --icon "ui/icons/app_icon.ico" `
     --add-data "ui/themes;ui/themes" `
     --add-data "ui/icons;ui/icons" `
@@ -51,46 +51,46 @@ pyinstaller --onefile --windowed `
     --hidden-import "psutil" `
     --collect-submodules "database" `
     --collect-submodules "tracker" `
-    --collect-submodules "statistics" `
+    --collect-submodules "trackora_stats" `
     --collect-submodules "services" `
     --collect-submodules "ui" `
-    gametracker/__main__.py
+    trackora/__main__.py
 ```
 
 ### Output
 
 ```
-dist/GameTracker.exe  (~52 MB)
+dist/Trackora.exe  (~52 MB)
 ```
 
 ## Runtime Paths
 
-When packaged, GameTracker stores data at:
+When packaged, Trackora stores data at:
 
-| Data        | Windows Path                                  |
-|-------------|-----------------------------------------------|
-| Database    | `%APPDATA%\GameTracker\gametracker.db`        |
-| Logs        | `%APPDATA%\GameTracker\logs\game_tracker.log` |
+| Data        | Windows Path                            |
+|-------------|-----------------------------------------|
+| Database    | `%APPDATA%\Trackora\trackora.db`        |
+| Logs        | `%APPDATA%\Trackora\logs\trackora.log` |
 
 No data is stored next to the executable — the application is fully portable and respects Windows conventions.
 
 ## Inno Setup Installer
 
-After building `dist/GameTracker.exe`, create the installer:
+After building `dist/Trackora.exe`, create the installer:
 
 ```bash
-iscc installer/GameTracker.iss
+iscc installer/Trackora.iss
 ```
 
 The installer is created at:
 
 ```
-installer/Output/GameTracker-Setup-1.0.0.exe
+installer/Output/Trackora-Setup-1.0.0.exe
 ```
 
 ## Code Signing
 
-GameTracker includes a helper script for code signing:
+Trackora includes a helper script for code signing:
 
 ```powershell
 # Create a self-signed certificate and sign the executable:
@@ -104,7 +104,7 @@ For production, obtain a certificate from a trusted CA (DigiCert, Sectigo, etc.)
 Manual signing with a purchased certificate:
 
 ```bash
-signtool sign /fd SHA256 /a /f "certificate.pfx" /p "password" /tr http://timestamp.digicert.com /td SHA256 dist/GameTracker.exe
+signtool sign /fd SHA256 /a /f "certificate.pfx" /p "password" /tr http://timestamp.digicert.com /td SHA256 dist/Trackora.exe
 ```
 
 ## CI/CD Pipeline
@@ -125,12 +125,12 @@ git push origin v1.0.0
 
 ## Automatic Updates
 
-GameTracker includes an `UpdateService` that checks GitHub Releases for newer versions. To integrate it:
+Trackora includes an `UpdateService` that checks GitHub Releases for newer versions. To integrate it:
 
 ```python
 from services import UpdateService
 
-updater = UpdateService("yourusername/gametracker")
+updater = UpdateService("yourusername/trackora")
 info = updater.check_for_updates()
 if updater.update_available:
     print(f"Update available: {info.latest_version}")
@@ -145,7 +145,7 @@ The spec file excludes unused packages to minimize binary size:
 
 | Excluded Package | Reason | Size Saved |
 |------------------|--------|------------|
-| matplotlib | Not directly used by GameTracker | ~15 MB |
+| matplotlib | Not directly used by Trackora | ~15 MB |
 | scipy, cupy, h5py | Optional pyqtgraph deps | ~5 MB |
 | PyQt5, PySide2/6 | Alternative Qt bindings | ~3 MB |
 | tkinter | Unused GUI framework | ~2 MB |
@@ -172,7 +172,7 @@ Verify `--add-data` paths use the correct separator:
 
 If the application fails to create the database or log files, check:
 
-1. `%APPDATA%\GameTracker\` exists and is writable
+1. `%APPDATA%\Trackora\` exists and is writable
 2. Antivirus is not blocking file creation in AppData
 3. The application is not running from a read-only location
 

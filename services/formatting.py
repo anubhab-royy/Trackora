@@ -1,5 +1,5 @@
 """
-Shared formatting utilities for GameTracker.
+Shared formatting utilities for Trackora.
 
 Currently provides:
     format_duration(seconds: int) -> str

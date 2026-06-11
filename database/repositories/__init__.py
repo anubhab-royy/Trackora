@@ -1,7 +1,7 @@
 """
 database.repositories
 ~~~~~~~~~~~~~~~~~~~~~
-Repository classes for every GameTracker table.
+Repository classes for every Trackora table.
 
 Public API:
     GamesRepository

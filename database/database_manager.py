@@ -1,7 +1,7 @@
 # Core: opens DB, applies PRAGMAs, creates schema
 
 """
-DatabaseManager for GameTracker.
+DatabaseManager for Trackora.
 
 Responsibilities:
     - Open / create the SQLite database file.

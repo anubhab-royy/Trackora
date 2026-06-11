@@ -1,4 +1,4 @@
-# GameTracker UI Specification
+# Trackora UI Specification
 
 Version: 1.0
 

@@ -1,6 +1,6 @@
 """
 ExportService — Phase 9
-CSV export and JSON backup for GameTracker.
+CSV export and JSON backup for Trackora.
 
 Requirements:
     AC-009 — CSV Export
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 class ExportService:
     """
-    Service for exporting GameTracker data to CSV and JSON.
+    Service for exporting Trackora data to CSV and JSON.
 
     Args:
         sessions_repository: Injected SessionsRepository instance.

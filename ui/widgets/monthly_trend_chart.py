@@ -15,7 +15,7 @@ import pyqtgraph as pg
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QSizePolicy, QVBoxLayout, QWidget, QLabel
 
-from gametracker_stats.models import MonthlyActivity
+from trackora_stats.models import MonthlyActivity
 
 logger = logging.getLogger(__name__)
 

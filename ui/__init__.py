@@ -1,1 +1,1 @@
-"""UI package — GameTracker."""
+"""UI package — Trackora."""

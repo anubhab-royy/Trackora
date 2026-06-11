@@ -1,7 +1,7 @@
 # All SQL for `sessions` + stats queries
 
 """
-SessionsRepository for GameTracker.
+SessionsRepository for Trackora.
 
 All SQL operations for the `sessions` table live here.
 Supports the full statistics requirements from acceptance_criteria.md:

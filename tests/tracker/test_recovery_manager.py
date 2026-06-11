@@ -508,7 +508,7 @@ class TestRecoveryResultProperties:
 class TestFullRecoveryScenario:
     def test_crash_recovery_scenario_ac008(self):
         """
-        AC-008: GameTracker terminates unexpectedly.
+        AC-008: Trackora terminates unexpectedly.
         When application restarts:
         - Active session recovered
         - No session data lost

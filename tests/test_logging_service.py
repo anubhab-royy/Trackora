@@ -28,7 +28,7 @@ class TestLoggingService:
     def test_setup_creates_log_file(self, tmp_path: Path) -> None:
         log_dir = tmp_path / "logs"
         LoggingService.setup(log_dir=log_dir, force=True)
-        log_file = log_dir / "game_tracker.log"
+        log_file = log_dir / "trackora.log"
         assert log_file.exists()
 
     def test_setup_idempotent(self, tmp_path: Path) -> None:

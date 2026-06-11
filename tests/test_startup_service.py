@@ -38,7 +38,7 @@ class TestStartupServicePlatform:
 class TestStartupServiceLinux:
     def test_linux_register_creates_desktop_file(self, tmp_path: Path) -> None:
         autostart_dir = tmp_path / ".config" / "autostart"
-        desktop_file = autostart_dir / "GameTracker.desktop"
+        desktop_file = autostart_dir / "Trackora.desktop"
 
         with patch(
             "services.startup_service._AUTOSTART_DIR", autostart_dir
@@ -49,14 +49,14 @@ class TestStartupServiceLinux:
             assert result is True
             assert desktop_file.is_file()
             content = desktop_file.read_text(encoding="utf-8")
-            assert "GameTracker" in content
+            assert "Trackora" in content
             assert "Exec=" in content
 
     def test_linux_is_registered_returns_true_when_file_exists(
         self, tmp_path: Path
     ) -> None:
         autostart_dir = tmp_path / ".config" / "autostart"
-        desktop_file = autostart_dir / "GameTracker.desktop"
+        desktop_file = autostart_dir / "Trackora.desktop"
         autostart_dir.mkdir(parents=True)
         desktop_file.write_text("[Desktop Entry]\n", encoding="utf-8")
 
@@ -69,7 +69,7 @@ class TestStartupServiceLinux:
         self, tmp_path: Path
     ) -> None:
         autostart_dir = tmp_path / ".config" / "autostart"
-        desktop_file = autostart_dir / "GameTracker.desktop"
+        desktop_file = autostart_dir / "Trackora.desktop"
 
         with patch(
             "services.startup_service._DESKTOP_FILE", desktop_file
@@ -78,7 +78,7 @@ class TestStartupServiceLinux:
 
     def test_linux_unregister_removes_desktop_file(self, tmp_path: Path) -> None:
         autostart_dir = tmp_path / ".config" / "autostart"
-        desktop_file = autostart_dir / "GameTracker.desktop"
+        desktop_file = autostart_dir / "Trackora.desktop"
         autostart_dir.mkdir(parents=True)
         desktop_file.write_text("[Desktop Entry]\n", encoding="utf-8")
 
@@ -92,7 +92,7 @@ class TestStartupServiceLinux:
     def test_linux_unregister_no_file_does_not_error(
         self, tmp_path: Path
     ) -> None:
-        desktop_file = tmp_path / "GameTracker.desktop"
+        desktop_file = tmp_path / "Trackora.desktop"
         assert not desktop_file.exists()
 
         with patch(
@@ -105,7 +105,7 @@ class TestStartupServiceLinux:
         self, tmp_path: Path
     ) -> None:
         autostart_dir = tmp_path / ".config" / "autostart"
-        desktop_file = autostart_dir / "GameTracker.desktop"
+        desktop_file = autostart_dir / "Trackora.desktop"
 
         with patch(
             "services.startup_service._AUTOSTART_DIR", autostart_dir

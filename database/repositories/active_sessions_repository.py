@@ -1,7 +1,7 @@
 # Session start/end/recovery
 
 """
-ActiveSessionsRepository for GameTracker.
+ActiveSessionsRepository for Trackora.
 
 All SQL operations for the `active_sessions` table live here.
 

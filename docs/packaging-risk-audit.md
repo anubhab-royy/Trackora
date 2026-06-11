@@ -1,4 +1,4 @@
-# GameTracker Packaging Risk Audit Report
+# Trackora Packaging Risk Audit Report
 
 **Version:** 1.0.0
 **Date:** 2026-06-09
@@ -32,7 +32,7 @@
 **Status:** MITIGATED
 
 The spec file explicitly lists:
-- All GameTracker packages and subpackages as hidden imports
+- All Trackora packages and subpackages as hidden imports
 - `PyQt6.QtSvg` (explicit hidden import)
 - `pyqtgraph` (handled by PyInstaller hook)
 - `psutil` (handled by PyInstaller contrib hook)
@@ -74,8 +74,8 @@ The tray icon loader in `tray_service.py` uses `Path(__file__).resolve()` which 
 **Status:** MITIGATED
 
 All runtime paths use APPDATA on Windows:
-- Database: `%APPDATA%\GameTracker\gametracker.db`
-- Logs: `%APPDATA%\GameTracker\logs\`
+- Database: `%APPDATA%\Trackora\Trackora.db`
+- Logs: `%APPDATA%\Trackora\logs\`
 
 The startup service (`startup_service.py`) correctly checks `sys.frozen` for path resolution.
 
@@ -142,7 +142,7 @@ The spec file adds `PyQt6.Qt6\bin` to the DLL search path.
 
 ## Recommendations
 
-1. **Code Signing:** Obtain a Windows code signing certificate and sign `dist/GameTracker.exe` with `signtool` before distribution.
+1. **Code Signing:** Obtain a Windows code signing certificate and sign `dist/Trackora.exe` with `signtool` before distribution.
 2. **Microsoft Defender Submission:** Submit the signed executable at https://www.microsoft.com/en-us/wdsi/filesubmission.
 3. **Periodic Rebuild:** Rebuild the executable when upgrading Python, PyQt6, or other major dependencies.
 4. **Test on Clean Windows:** Test the installer on a clean Windows VM to verify all paths work correctly.

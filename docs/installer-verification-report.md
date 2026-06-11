@@ -1,4 +1,4 @@
-# GameTracker Installer Verification Report
+# Trackora Installer Verification Report
 
 **Version:** 1.0.0
 **Date:** 2026-06-09
@@ -11,8 +11,8 @@
 | Parameter | Value |
 |-----------|-------|
 | Installer Tool | Inno Setup 6+ |
-| Script | `installer/GameTracker.iss` |
-| Output | `installer/Output/GameTracker-Setup-1.0.0.exe` |
+| Script | `installer/Trackora.iss` |
+| Output | `installer/Output/Trackora-Setup-1.0.0.exe` |
 | App ID | `{{8E3B5C1A-2D4F-4E6A-9B7C-1D2E3F4A5B6C}}` |
 | Compression | lzma2/max (maximum) |
 | Architecture | 64-bit Windows |
@@ -22,12 +22,12 @@
 ## Validation Checks
 
 ### 1. Installation Directory
-- Default: `{autopf}\GameTracker` (Program Files)
+- Default: `{autopf}\Trackora` (Program Files)
 - Configurable via wizard: **YES**
 
 ### 2. Start Menu Shortcuts
-- `GameTracker` application shortcut: **YES**
-- `Uninstall GameTracker` shortcut: **YES**
+- `Trackora` application shortcut: **YES**
+- `Uninstall Trackora` shortcut: **YES**
 
 ### 3. Desktop Shortcut
 - Optional, controlled by `desktopicon` task: **YES**
@@ -39,7 +39,7 @@
 ### 5. Uninstall Support
 - Windows Programs & Features entry: **YES**
 - Uninstall icon: Application icon
-- Display name: `GameTracker 1.0.0`
+- Display name: `Trackora 1.0.0`
 
 ### 6. Upgrade Support
 - App ID persistent across versions: **YES**
@@ -62,23 +62,23 @@
 **Prerequisites:** Inno Setup 6+ installed
 
 ```bash
-iscc installer/GameTracker.iss
+iscc installer/Trackora.iss
 ```
 
-Output: `installer/Output/GameTracker-Setup-1.0.0.exe`
+Output: `installer/Output/Trackora-Setup-1.0.0.exe`
 
 ---
 
 ## Installation Flow
 
-1. User runs `GameTracker-Setup-1.0.0.exe`
+1. User runs `Trackora-Setup-1.0.0.exe`
 2. Welcome screen
-3. Select installation directory (default: Program Files\GameTracker)
+3. Select installation directory (default: Program Files\Trackora)
 4. Select components:
    - Desktop shortcut (optional)
    - Start with Windows (optional)
 5. Install
-6. Optional: Launch GameTracker immediately
+6. Optional: Launch Trackora immediately
 
 ---
 
@@ -87,11 +87,11 @@ Output: `installer/Output/GameTracker-Setup-1.0.0.exe`
 | Check | Expected Result |
 |-------|----------------|
 | Installation completes | Wizard finishes without errors |
-| Start Menu entry | GameTracker appears in Start Menu |
+| Start Menu entry | Trackora appears in Start Menu |
 | Launch from Start Menu | Application starts |
-| System tray icon | GameTracker icon appears in tray |
-| Database created | `%APPDATA%\GameTracker\gametracker.db` exists |
-| Logs created | `%APPDATA%\GameTracker\logs\game_tracker.log` exists |
+| System tray icon | Trackora icon appears in tray |
+| Database created | `%APPDATA%\Trackora\Trackora.db` exists |
+| Logs created | `%APPDATA%\Trackora\logs\trackora.log` exists |
 | Uninstall works | Remove from Programs & Features |
 | No files left after uninstall | Only AppData remains (user data) |
 
@@ -101,4 +101,4 @@ Output: `installer/Output/GameTracker-Setup-1.0.0.exe`
 
 **INSTALLER CONFIGURATION VALIDATED** — All configuration checks pass.
 
-The Inno Setup script is complete and ready for use. Build the installer with `iscc installer/GameTracker.iss` after installing Inno Setup 6+.
+The Inno Setup script is complete and ready for use. Build the installer with `iscc installer/Trackora.iss` after installing Inno Setup 6+.

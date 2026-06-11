@@ -1,4 +1,4 @@
-# GameTracker Database Schema
+# Trackora Database Schema
 
 Version: 1.0
 

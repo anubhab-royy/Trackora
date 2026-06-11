@@ -1,15 +1,15 @@
 <#
 .SYNOPSIS
-    Code signing helper for GameTracker.
+    Code signing helper for Trackora.
 .DESCRIPTION
     Creates a self-signed certificate for development/testing and
-    signs the GameTracker executable. For production, replace the
+    signs the Trackora executable. For production, replace the
     self-signed cert with a trusted certificate from a CA.
 .PARAMETER ExecutablePath
-    Path to the executable to sign. Default: dist/GameTracker.exe
+    Path to the executable to sign. Default: dist/Trackora.exe
 .PARAMETER CertSubject
     Subject name for the self-signed certificate.
-    Default: "CN=GameTracker, O=GameTracker, C=US"
+    Default: "CN=Trackora, O=Trackora, C=US"
 .PARAMETER OutputDir
     Where to store the generated certificate files.
     Default: certs/
@@ -22,8 +22,8 @@
 #>
 
 param(
-    [string]$ExecutablePath = "dist\GameTracker.exe",
-    [string]$CertSubject = "CN=GameTracker, O=GameTracker, C=US",
+    [string]$ExecutablePath = "dist\Trackora.exe",
+    [string]$CertSubject = "CN=Trackora, O=Trackora, C=US",
     [string]$OutputDir = "certs"
 )
 
@@ -39,7 +39,7 @@ function Test-Command($cmd) {
 # ------------------------------------------------------------------ #
 # Step 1: Install prerequisites
 # ------------------------------------------------------------------ #
-Write-Host "=== GameTracker Code Signing ===" -ForegroundColor Cyan
+Write-Host "=== Trackora Code Signing ===" -ForegroundColor Cyan
 
 # Check for signtool (comes with Windows SDK)
 if (-not (Test-Command "signtool")) {
@@ -60,8 +60,8 @@ if (-not (Test-Path $OutputDir)) {
 # ------------------------------------------------------------------ #
 # Step 3: Generate or locate the certificate
 # ------------------------------------------------------------------ #
-$pfxPath = Join-Path $OutputDir "GameTracker-dev.pfx"
-$cerPath = Join-Path $OutputDir "GameTracker-dev.cer"
+$pfxPath = Join-Path $OutputDir "Trackora-dev.pfx"
+$cerPath = Join-Path $OutputDir "Trackora-dev.cer"
 
 if (-not (Test-Path $pfxPath)) {
     Write-Host "Generating self-signed certificate..." -ForegroundColor Yellow
@@ -72,13 +72,13 @@ if (-not (Test-Path $pfxPath)) {
     # Create a self-signed certificate
     $cert = New-SelfSignedCertificate `
         -Subject $CertSubject `
-        -FriendlyName "GameTracker Development" `
+        -FriendlyName "Trackora Development" `
         -Type CodeSigning `
         -CertStoreLocation "Cert:\CurrentUser\My" `
         -NotAfter (Get-Date).AddYears(3)
 
     # Export to PFX (with private key) and CER (public key only)
-    $password = ConvertTo-SecureString -String "GameTrackerDev" -Force -AsPlainText
+    $password = ConvertTo-SecureString -String "TrackoraDev" -Force -AsPlainText
     Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $password | Out-Null
     Export-Certificate -Cert $cert -FilePath $cerPath -Type CERT | Out-Null
 
@@ -92,7 +92,7 @@ if (-not (Test-Path $pfxPath)) {
 # ------------------------------------------------------------------ #
 if (-not (Test-Path $ExecutablePath)) {
     Write-Host "ERROR: Executable not found: $ExecutablePath" -ForegroundColor Red
-    Write-Host "Build the executable first with: pyinstaller GameTracker.spec"
+    Write-Host "Build the executable first with: pyinstaller Trackora.spec"
     exit 1
 }
 
@@ -105,7 +105,7 @@ if (Test-Path $pfxPath) {
         /fd SHA256 `
         /a `
         /f $pfxPath `
-        /p "GameTrackerDev" `
+        /p "TrackoraDev" `
         /tr $timestampServer `
         /td SHA256 `
         $ExecutablePath
@@ -145,5 +145,5 @@ Write-Host "  - Sectigo:   https://sectigo.com/"
 Write-Host "  - GlobalSign: https://www.globalsign.com/"
 Write-Host ""
 Write-Host "After obtaining a real certificate, run this script again" -ForegroundColor Yellow
-Write-Host "or sign manually with:" -ForegroundColor Yellow
-Write-Host "  signtool sign /fd SHA256 /a /f your-cert.pfx /p your-password /tr http://timestamp.digicert.com /td SHA256 dist\GameTracker.exe"
+Write-Host "  or sign manually with:" -ForegroundColor Yellow
+Write-Host "  signtool sign /fd SHA256 /a /f your-cert.pfx /p your-password /tr http://timestamp.digicert.com /td SHA256 dist\Trackora.exe"

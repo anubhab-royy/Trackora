@@ -31,7 +31,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run tests
-        run: python -m pytest --tb=short --cov=gametracker --cov-report=term-missing
+        run: python -m pytest --tb=short --cov=trackora --cov-report=term-missing
 
   build:
     name: Build executable
@@ -51,13 +51,13 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Build executable
-        run: pyinstaller GameTracker.spec
+        run: pyinstaller Trackora.spec
 
       - name: Upload executable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GameTracker.exe
-          path: dist/GameTracker.exe
+          name: Trackora.exe
+          path: dist/Trackora.exe
 
   release:
     name: Create Release
@@ -71,15 +71,15 @@ jobs:
       - name: Download executable
         uses: actions/download-artifact@v4
         with:
-          name: GameTracker.exe
+          name: Trackora.exe
           path: dist/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          name: GameTracker ${{ github.ref_name }}
+          name: Trackora ${{ github.ref_name }}
           body_path: CHANGELOG.md
           files: |
-            dist/GameTracker.exe
+            dist/Trackora.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

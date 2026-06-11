@@ -1,7 +1,7 @@
 # Upsert key/value store
 
 """
-SettingsRepository for GameTracker.
+SettingsRepository for Trackora.
 
 All SQL operations for the `settings` table live here.
 

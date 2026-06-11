@@ -1,5 +1,5 @@
 # ui/widgets/__init__.py
-"""Reusable UI widgets for GameTracker."""
+"""Reusable UI widgets for Trackora."""
 
 from ui.widgets.stat_card import StatCard
 from ui.widgets.game_card import GameCard

@@ -9,7 +9,7 @@ Provides:
     - Download link for the new installer
 
 Usage:
-    update_service = UpdateService("yourusername/gametracker")
+    update_service = UpdateService("yourusername/trackora")
     update_service.check_for_updates()
     if update_service.update_available:
         # show notification / dialog
@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.request import Request, urlopen
 
-from gametracker import __version__
+from trackora import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +47,14 @@ class UpdateInfo:
 
 class UpdateService:
     """
-    Checks for GameTracker updates via the GitHub Releases API.
+    Checks for Trackora updates via the GitHub Releases API.
 
     Args:
         repo: GitHub repository in "owner/name" format.
-              Defaults to "yourusername/gametracker".
+              Defaults to "yourusername/trackora".
     """
 
-    def __init__(self, repo: str = "yourusername/gametracker") -> None:
+    def __init__(self, repo: str = "yourusername/trackora") -> None:
         self._repo = repo
         self._update_info: Optional[UpdateInfo] = None
 
@@ -90,7 +90,7 @@ class UpdateService:
                     info.latest_version,
                 )
             else:
-                logger.debug("GameTracker is up to date (%s).", __version__)
+                logger.debug("Trackora is up to date (%s).", __version__)
             return info
         except Exception as exc:
             logger.warning("Update check failed: %s", exc)
@@ -115,7 +115,7 @@ class UpdateService:
     def _fetch_latest_release(self) -> UpdateInfo:
         """Query the GitHub Releases API and parse the response."""
         url = _GITHUB_API_URL.format(repo=self._repo)
-        req = Request(url, headers={"Accept": "application/json", "User-Agent": "GameTracker"})
+        req = Request(url, headers={"Accept": "application/json", "User-Agent": "Trackora"})
 
         context = ssl.create_default_context()
         response = urlopen(req, timeout=_CONNECTION_TIMEOUT, context=context)

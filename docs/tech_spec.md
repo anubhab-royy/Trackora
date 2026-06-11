@@ -1,10 +1,10 @@
-# GameTracker Technical Specification
+# Trackora Technical Specification
 
 Version: 1.0
 
 ## Purpose
 
-This document defines the technical implementation details of GameTracker Version 1.0.
+This document defines the technical implementation details of Trackora Version 1.0.
 
 This document serves as the engineering blueprint for development.
 
@@ -46,7 +46,7 @@ Installer:
 
 # Project Structure
 
-GameTracker/
+Trackora/
 
 ├── tracker/
 ├── database/

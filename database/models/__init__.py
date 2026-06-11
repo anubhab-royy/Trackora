@@ -1,7 +1,7 @@
 """
 database.models
 ~~~~~~~~~~~~~~~
-Dataclass models that mirror the GameTracker database schema (v1.0).
+Dataclass models that mirror the Trackora database schema (v1.0).
 
 Public API:
     Game

@@ -1,4 +1,4 @@
-# GameTracker Build Verification Report
+# Trackora Build Verification Report
 
 **Version:** 1.0.0
 **Date:** 2026-06-09
@@ -12,8 +12,8 @@
 |-----------|-------|
 | PyInstaller Version | 6.20.0 |
 | Python Version | 3.14.3 |
-| Build Spec | `GameTracker.spec` |
-| Entry Point | `gametracker/__main__.py` |
+| Build Spec | `Trackora.spec` |
+| Entry Point | `Trackora/__main__.py` |
 | Build Mode | `--onefile --windowed` |
 | Compression | UPX enabled |
 | Version Resource | Embedded |
@@ -24,7 +24,7 @@
 
 | Item | Value |
 |------|-------|
-| Executable | `dist/GameTracker.exe` |
+| Executable | `dist/Trackora.exe` |
 | Size | 69,982,153 bytes (~69 MB) |
 | Build Time | ~1 minute 10 seconds |
 | Console Window | None (`--windowed` mode) |
@@ -36,7 +36,7 @@
 ## Validation Results
 
 ### 1. Executable Exists
-- `dist/GameTracker.exe` present: **PASS**
+- `dist/Trackora.exe` present: **PASS**
 
 ### 2. No Console Window
 - Build uses `--windowed` (console=False in spec): **PASS**

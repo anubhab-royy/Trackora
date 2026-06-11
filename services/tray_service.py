@@ -1,6 +1,6 @@
 """
 TrayService — Phase 9
-System tray icon and context menu for GameTracker.
+System tray icon and context menu for Trackora.
 
 Provides:
     - Tray icon with application icon
@@ -36,7 +36,7 @@ _ICON_PATH = Path(__file__).resolve().parent.parent / "ui" / "icons" / "app_icon
 
 class TrayService(QObject):
     """
-    System tray icon for GameTracker.
+    System tray icon for Trackora.
 
     Signals:
         show_requested      — user clicked "Show" or double-clicked tray icon
@@ -77,7 +77,7 @@ class TrayService(QObject):
         icon = self._load_icon()
 
         self._tray_icon = QSystemTrayIcon(icon, self._window)
-        self._tray_icon.setToolTip("GameTracker")
+        self._tray_icon.setToolTip("Trackora")
 
         menu = self._build_menu()
         self._tray_icon.setContextMenu(menu)
@@ -132,7 +132,7 @@ class TrayService(QObject):
         """Build the tray context menu."""
         menu = QMenu()
 
-        self.show_action = QAction("Show GameTracker", menu)
+        self.show_action = QAction("Show Trackora", menu)
         self.show_action.triggered.connect(self.show_requested.emit)
         menu.addAction(self.show_action)
 

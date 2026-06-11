@@ -1,7 +1,7 @@
 # ActiveSession dataclass (crash recovery)
 
 """
-ActiveSession model for GameTracker.
+ActiveSession model for Trackora.
 
 Maps directly to the `active_sessions` table defined in database_schema.md.
 
