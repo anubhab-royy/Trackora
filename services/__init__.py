@@ -5,6 +5,7 @@ from services.game_service import GameService
 from services.logging_service import LoggingService
 from services.session_history_service import SessionHistoryService
 from services.startup_service import StartupService
+from services.support.github_issue_service import GitHubIssueService
 from services.support.support_service import SupportService
 from services.tray_service import TrayService
 from services.update_service import UpdateService
@@ -12,6 +13,7 @@ from services.update_service import UpdateService
 __all__ = [
     "ExportService",
     "GameService",
+    "GitHubIssueService",
     "LoggingService",
     "SessionHistoryService",
     "StartupService",

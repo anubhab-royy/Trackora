@@ -206,7 +206,15 @@ Internal tabs (top bar):
 3. General Feedback
 4. Upcoming Updates
 
-No form submission logic yet (planned for v1.2.0).
+Form submission implemented via GitHub Issues REST API.
+
+Each form page has a Submit button. On submit:
+1. Form data is validated (title/description required).
+2. BugReport / FeatureRequest / FeedbackReport model is created.
+3. Report is stored locally.
+4. If GitHub is configured, report is submitted as a GitHub Issue.
+5. Result is shown inline (green for success, red for error).
+6. GitHub submission errors are user-friendly (auth, rate limit, not found).
 
 ---
 
