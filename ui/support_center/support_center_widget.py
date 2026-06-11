@@ -7,8 +7,6 @@ Displays four sub-views switched by top navigation buttons:
   - Suggest Feature
   - General Feedback
   - Upcoming Updates
-
-No submission logic. Navigation only.
 """
 
 from __future__ import annotations
@@ -46,12 +44,19 @@ class SupportCenterWidget(QWidget):
     """Support Center main widget with internal page navigation."""
 
     navigation_requested = pyqtSignal(str)
+    submit_requested = pyqtSignal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._nav_buttons: dict[str, QPushButton] = {}
         self._updates_container: QVBoxLayout | None = None
+        self._submit_buttons: dict[str, QPushButton] = {}
+        self._status_labels: dict[str, QLabel] = {}
         self._setup_ui()
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     def set_upcoming_updates(self, updates: list[object]) -> None:
         """Populate the Upcoming Updates page with update items."""
@@ -85,6 +90,62 @@ class SupportCenterWidget(QWidget):
             card_layout.addWidget(version_label)
 
             self._updates_container.addWidget(card)
+
+    def navigate_to(self, page_key: str) -> None:
+        """Programmatically navigate to a support page."""
+        self._on_nav_clicked(page_key)
+
+    def set_submitting(self, page_key: str, submitting: bool) -> None:
+        """Enable or disable the submit button and show a loading state."""
+        btn = self._submit_buttons.get(page_key)
+        if btn is not None:
+            btn.setEnabled(not submitting)
+            btn.setText("Submitting..." if submitting else "Submit")
+
+    def set_submit_result(
+        self, page_key: str, success: bool, message: str
+    ) -> None:
+        """Show submission result on the given page."""
+        label = self._status_labels.get(page_key)
+        if label is None:
+            return
+        color = "#a6e3a1" if success else "#f38ba8"
+        label.setStyleSheet(
+            f"font-size: 12px; color: {color}; padding: 4px 0;"
+        )
+        label.setText(message)
+
+    def clear_submit_result(self, page_key: str) -> None:
+        """Clear the submission status message."""
+        label = self._status_labels.get(page_key)
+        if label is not None:
+            label.setText("")
+
+    def get_bug_form_data(self) -> dict:
+        return {
+            "title": self._bug_title.text().strip(),
+            "description": self._bug_description.toPlainText().strip(),
+            "steps": self._bug_steps.toPlainText().strip(),
+            "expected": self._bug_expected.text().strip(),
+            "actual": self._bug_actual.text().strip(),
+            "severity": self._bug_severity.currentText(),
+        }
+
+    def get_feature_form_data(self) -> dict:
+        return {
+            "title": self._feature_title.text().strip(),
+            "description": self._feature_description.toPlainText().strip(),
+            "use_case": self._feature_use_case.toPlainText().strip(),
+            "priority": self._feature_priority.currentText(),
+        }
+
+    def get_feedback_form_data(self) -> dict:
+        return {
+            "subject": self._feedback_subject.text().strip(),
+            "message": self._feedback_message.toPlainText().strip(),
+            "category": self._feedback_category.currentText(),
+            "contact_ok": self._feedback_contact.isChecked(),
+        }
 
     # ------------------------------------------------------------------
     # UI Construction
@@ -129,7 +190,7 @@ class SupportCenterWidget(QWidget):
             btn = QPushButton(label)
             btn.setObjectName("SecondaryButton")
             btn.setFixedHeight(36)
-            btn.setCursor(btn.cursor().shape)  # keep default arrow
+            btn.setCursor(btn.cursor().shape)
             btn.clicked.connect(lambda checked, k=page_key: self._on_nav_clicked(k))
             bar_layout.addWidget(btn)
             self._nav_buttons[page_key] = btn
@@ -141,10 +202,10 @@ class SupportCenterWidget(QWidget):
         self._stack = QStackedWidget()
         self._stack.setObjectName("SupportPages")
 
-        self._stack.addWidget(self._build_report_bug_page())      # index 0
-        self._stack.addWidget(self._build_suggest_feature_page())  # index 1
-        self._stack.addWidget(self._build_feedback_page())         # index 2
-        self._stack.addWidget(self._build_upcoming_updates_page())  # index 3
+        self._stack.addWidget(self._build_report_bug_page())
+        self._stack.addWidget(self._build_suggest_feature_page())
+        self._stack.addWidget(self._build_feedback_page())
+        self._stack.addWidget(self._build_upcoming_updates_page())
 
         return self._stack
 
@@ -155,7 +216,8 @@ class SupportCenterWidget(QWidget):
         layout.setSpacing(12)
 
         form_intro = QLabel(
-            "Use this form to report a bug. Please provide as much detail as possible."
+            "Use this form to report a bug. "
+            "Please provide as much detail as possible."
         )
         form_intro.setWordWrap(True)
         form_intro.setStyleSheet("font-size: 13px; color: #6c7086;")
@@ -193,6 +255,7 @@ class SupportCenterWidget(QWidget):
         self._bug_severity.addItems(["low", "medium", "high", "critical"])
         layout.addWidget(self._bug_severity)
 
+        layout.addWidget(self._build_submit_section("report_bug"))
         layout.addStretch()
         return page
 
@@ -235,6 +298,7 @@ class SupportCenterWidget(QWidget):
         self._feature_priority.addItems(["low", "medium", "high"])
         layout.addWidget(self._feature_priority)
 
+        layout.addWidget(self._build_submit_section("suggest_feature"))
         layout.addStretch()
         return page
 
@@ -245,7 +309,7 @@ class SupportCenterWidget(QWidget):
         layout.setSpacing(12)
 
         form_intro = QLabel(
-            "Share your thoughts about Trackora — praise, complaints, "
+            "Share your thoughts about Trackora \u2014 praise, complaints, "
             "or general suggestions."
         )
         form_intro.setWordWrap(True)
@@ -273,6 +337,7 @@ class SupportCenterWidget(QWidget):
         )
         layout.addWidget(self._feedback_contact)
 
+        layout.addWidget(self._build_submit_section("feedback"))
         layout.addStretch()
         return page
 
@@ -282,9 +347,7 @@ class SupportCenterWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        intro = QLabel(
-            "See what's coming next in Trackora."
-        )
+        intro = QLabel("See what\u2019s coming next in Trackora.")
         intro.setWordWrap(True)
         intro.setStyleSheet("font-size: 13px; color: #6c7086;")
         layout.addWidget(intro)
@@ -299,6 +362,24 @@ class SupportCenterWidget(QWidget):
 
         layout.addStretch()
         return page
+
+    def _build_submit_section(self, page_key: str) -> QWidget:
+        section = QWidget()
+        section_layout = QVBoxLayout(section)
+        section_layout.setContentsMargins(0, 8, 0, 0)
+        section_layout.setSpacing(4)
+
+        self._status_labels[page_key] = QLabel("")
+        section_layout.addWidget(self._status_labels[page_key])
+
+        btn = QPushButton("Submit")
+        btn.setFixedHeight(36)
+        btn.setMaximumWidth(160)
+        btn.clicked.connect(lambda: self.submit_requested.emit(page_key))
+        section_layout.addWidget(btn)
+        self._submit_buttons[page_key] = btn
+
+        return section
 
     # ------------------------------------------------------------------
     # Internal Slots
@@ -323,13 +404,6 @@ class SupportCenterWidget(QWidget):
                 btn.setStyleSheet("")
             btn.style().unpolish(btn)
             btn.style().polish(btn)
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
-    def navigate_to(self, page_key: str) -> None:
-        self._on_nav_clicked(page_key)
 
     # ------------------------------------------------------------------
     # Helpers
