@@ -98,6 +98,7 @@ def main() -> None:
         settings_repo=settings_repo,
         active_sessions_repo=active_sessions_repo,
         games_repo=games_repo,
+        tracking_state=tracking_state,
     )
 
     def reload_tracked_games() -> None:

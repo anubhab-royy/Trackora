@@ -6,7 +6,7 @@ Version: 1.1
 
 # System Overview
 
-Trackora consists of six major layers:
+Trackora consists of seven major layers:
 
 1. Tracking Layer
 2. Database Layer
@@ -14,6 +14,7 @@ Trackora consists of six major layers:
 4. UI Layer
 5. System Services Layer
 6. Support Layer
+7. Crash Detection Layer
 
 ---
 
@@ -240,13 +241,88 @@ Dependencies:
 
 ---
 
+# Crash Detection Layer
+
+Responsibility:
+
+Detect unexpected application shutdowns, collect diagnostics, and prompt the user to submit crash reports.
+
+Modules:
+
+services/crash/crash_service.py
+
+services/crash/diagnostic_service.py
+
+ui/crash_dialog.py
+
+Components:
+
+* StartupStateManager — manages startup_state.json lifecycle (atomic writes)
+  * mark_running() — called at startup
+  * mark_closed_cleanly() — called on clean exit
+  * detect_crash() — returns True if previous state was "running"
+
+* DiagnosticService — collects environment snapshot for crash reports
+  * collect_report() — builds CrashReport dataclass
+  * save_report() — atomically writes crash report JSON to disk
+  * Captures: app version, OS version, active sessions, tracking state, recent log entries, stack trace
+
+* CrashService — orchestrates crash check, report generation, and state lifecycle
+  * check_for_crash() — reads previous state, generates/saves report if crashed
+  * mark_startup() — delegates to StartupStateManager
+  * mark_clean_shutdown() — delegates to StartupStateManager
+
+* CrashDialog — QDialog with Send Report / Review Report / Dismiss
+  * Send Report: submits crash as GitHub Issue (label: crash)
+  * Review Report: displays JSON in read-only text area
+  * Dismiss: deletes the crash report file
+
+Storage:
+
+%APPDATA%/Trackora/startup_state.json       — lifecycle state
+
+%APPDATA%/Trackora/crash_reports/            — persisted crash reports
+
+Lifecycle:
+
+Application start
+  ↓
+check_for_crash() — reads previous startup_state.json
+  ├─ status=running  → generates CrashReport, saves JSON, shows CrashDialog
+  │   ├─ Send        → GitHub Issue (label: crash)
+  │   ├─ Review      → display JSON
+  │   └─ Dismiss     → delete report file
+  └─ status=closed_cleanly or missing → normal startup
+  ↓
+mark_startup() — writes status=running to startup_state.json
+  ↓
+Normal operation
+  ↓
+On clean exit (quit menu, tray, OS shutdown):
+  mark_clean_shutdown() — writes status=closed_cleanly to startup_state.json
+
+Crash scenarios detected:
+
+* Power loss → startup_state.json remains "running"
+* taskkill /F → startup_state.json remains "running"
+* Unhandled exception → sys.excepthook saves report before exit
+* Windows shutdown with cleanup → aboutToQuit fires → mark_clean_shutdown
+* Forced termination (no cleanup) → "running" persists → detected on next launch
+
+Dependencies:
+
+* urllib (crash report submission via GitHubIssueService)
+* platform (stdlib, OS version detection)
+
+---
+
 # Error Handling
 
 Every module writes logs.
 
 logs/
 
-yyyy-mm-dd.log
+yyy-mm-dd.log
 
 Log Levels:
 

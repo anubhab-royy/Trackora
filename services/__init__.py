@@ -1,5 +1,7 @@
 """Services package — Trackora business logic layer."""
 
+from services.crash.crash_service import CrashResult, CrashService, StartupState, StartupStateManager
+from services.crash.diagnostic_service import CrashReport, DiagnosticService
 from services.export_service import ExportService
 from services.game_service import GameService
 from services.logging_service import LoggingService
@@ -12,6 +14,10 @@ from services.tray_service import TrayService
 from services.update_service import UpdateService
 
 __all__ = [
+    "CrashReport",
+    "CrashResult",
+    "CrashService",
+    "DiagnosticService",
     "ExportService",
     "GameService",
     "GitHubIssueService",
@@ -19,6 +25,8 @@ __all__ = [
     "ReportQueueService",
     "SessionHistoryService",
     "StartupService",
+    "StartupState",
+    "StartupStateManager",
     "SupportService",
     "TrayService",
     "UpdateService",

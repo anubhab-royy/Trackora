@@ -1,5 +1,5 @@
 """
-MainWindow — Phase 11
+MainWindow — Phase 12
 Application-level window that assembles all UI views into a single
 QMainWindow with sidebar navigation.
 
@@ -9,13 +9,14 @@ Architecture:
   - Integrates TrayService for minimize-to-tray.
   - Provides theme toggle and export actions.
   - Processes offline report queue on startup.
+  - Detects unexpected shutdowns and prompts user.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import (
@@ -38,6 +39,8 @@ from database.repositories import (
     GamesRepository,
     SettingsRepository,
 )
+from services.crash.crash_service import CrashService
+from services.crash.diagnostic_service import DiagnosticService
 from services.export_service import ExportService
 from services.game_service import GameService
 from services.session_history_service import SessionHistoryService
@@ -45,7 +48,9 @@ from services.support.github_issue_service import GitHubIssueService
 from services.support.report_queue_service import ReportQueueService
 from services.support.support_service import SupportService
 from services.tray_service import TrayService
+from tracker.tracking_state import TrackingState
 from trackora_stats.statistics_service import StatisticsService
+from ui.crash_dialog import CrashDialog
 from ui.dashboard.dashboard_controller import DashboardController
 from ui.dashboard.dashboard_widget import DashboardWidget
 from ui.games.games_controller import GamesController
@@ -84,6 +89,7 @@ class MainWindow(QMainWindow):
         active_sessions_repo: ActiveSessionsRepository,
         games_repo: GamesRepository,
         support_service: SupportService | None = None,
+        tracking_state: TrackingState | None = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -95,11 +101,21 @@ class MainWindow(QMainWindow):
         self._settings_repo = settings_repo
         self._active_repo = active_sessions_repo
         self._games_repo = games_repo
+        self._tracking_state = tracking_state
+
+        # Crash detection — check PREVIOUS session's state before
+        # overwriting with this session's "running" marker.
+        self._diagnostic_service = DiagnosticService()
+        self._crash_service = CrashService(self._diagnostic_service)
+        self._github_service = GitHubIssueService(self._settings_repo)
         self._queue_service = ReportQueueService()
         self._support_service = support_service or SupportService(
-            github_service=GitHubIssueService(self._settings_repo),
+            github_service=self._github_service,
             queue_service=self._queue_service,
         )
+
+        self._check_for_crashes()
+        self._crash_service.mark_startup()
 
         self._process_report_queue()
 
@@ -113,6 +129,11 @@ class MainWindow(QMainWindow):
         self._create_menu_actions()
         self._setup_tray()
         self._setup_auto_refresh()
+
+        # Ensure clean shutdown even on OS shutdown
+        app = QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._on_about_to_quit)
 
         logger.info("MainWindow initialised.")
 
@@ -250,7 +271,16 @@ class MainWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
 
+    def _on_about_to_quit(self) -> None:
+        """Ensure clean shutdown is marked.
+
+        Handles OS shutdown (WM_ENDSESSION) and any path where
+        app.quit() is called without going through _quit_app.
+        """
+        self._crash_service.mark_clean_shutdown()
+
     def _quit_app(self) -> None:
+        self._crash_service.mark_clean_shutdown()
         app = QApplication.instance()
         if app is not None:
             app.quit()
@@ -334,3 +364,38 @@ class MainWindow(QMainWindow):
                 )
         except Exception as exc:
             logger.error("Queue processing error: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Crash detection
+    # ------------------------------------------------------------------
+
+    def _check_for_crashes(self) -> None:
+        """Check if the previous session crashed and prompt the user."""
+        active: list[dict[str, Any]] = []
+        tracked = 0
+        was_tracking = False
+        if self._tracking_state is not None:
+            for session in self._tracking_state.active_sessions.values():
+                active.append({
+                    "game_id": session.game_id,
+                    "game_name": session.game_name,
+                    "process_id": session.process_id,
+                })
+            tracked = len(self._tracking_state.tracked_games)
+            was_tracking = self._tracking_state.is_running
+
+        result = self._crash_service.check_for_crash(
+            active_sessions=active,
+            tracked_games=tracked,
+            was_tracking=was_tracking,
+        )
+        if not result.has_crashed:
+            return
+
+        dialog = CrashDialog(
+            report=result.report,
+            report_path=result.report_path,
+            github_service=self._github_service,
+            parent=self,
+        )
+        dialog.exec()
