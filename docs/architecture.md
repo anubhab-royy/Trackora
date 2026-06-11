@@ -195,13 +195,33 @@ Architecture:
 
 models/support/ — Domain dataclasses (BugReport, FeatureRequest, FeedbackReport)
 
-services/support/ — SupportService interface (in-memory storage, future GitHub API)
+services/support/ — SupportService facade + GitHubIssueService (GitHub REST API)
 
-ui/support_center/ — SupportCenterView + SupportCenterController (navigation-based, no submission logic yet)
+ui/support_center/ — SupportCenterView + SupportCenterController (navigation + form submission)
+
+Components:
+
+* GitHubIssueService — creates GitHub Issues via REST API (POST /repos/{owner}/{repo}/issues)
+* SupportService — orchestrates local storage + GitHub submission
+* SupportCenterController — handles form validation, submission, and result display
+
+Settings keys (stored in database via SettingsRepository):
+
+* github_token        — Personal Access Token (classic, with `public_repo` or `repo` scope)
+* github_repo_owner   — GitHub username or organisation that owns the target repository
+* github_repo_name    — Repository name to create issues in
+
+Error handling:
+
+* Network failures     → user message: "Could not connect to GitHub."
+* HTTP 401             → user message: "Authentication failed. Check your token."
+* HTTP 403             → user message: "Rate limit reached or access denied."
+* HTTP 404             → user message: "Repository not found. Check owner/name."
+* Missing config       → local-only storage with informational message
 
 Dependencies:
 
-* None (standalone layer, no database dependency)
+* urllib (stdlib, no extra install needed)
 
 ---
 

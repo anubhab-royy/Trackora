@@ -40,6 +40,7 @@ from database.repositories import (
 from services.export_service import ExportService
 from services.game_service import GameService
 from services.session_history_service import SessionHistoryService
+from services.support.github_issue_service import GitHubIssueService
 from services.support.support_service import SupportService
 from services.tray_service import TrayService
 from trackora_stats.statistics_service import StatisticsService
@@ -92,7 +93,9 @@ class MainWindow(QMainWindow):
         self._settings_repo = settings_repo
         self._active_repo = active_sessions_repo
         self._games_repo = games_repo
-        self._support_service = support_service or SupportService()
+        self._support_service = support_service or SupportService(
+            github_service=GitHubIssueService(self._settings_repo),
+        )
 
         self.setWindowTitle("Trackora")
         self.setMinimumSize(1000, 650)
