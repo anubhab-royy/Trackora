@@ -8,6 +8,7 @@ from models.support.bug_report import BugReport
 from models.support.feature_request import FeatureRequest
 from models.support.feedback_report import FeedbackReport
 from services.support.support_service import SupportSubmitResult
+from services.update_announcements_service import AnnouncementsResult
 from ui.support_center.support_center_controller import SupportCenterController
 
 
@@ -40,7 +41,12 @@ def mock_view():
 @pytest.fixture
 def mock_service():
     svc = MagicMock()
-    svc.get_upcoming_updates.return_value = []
+    svc.get_announcements.return_value = AnnouncementsResult(
+        current_version="1.0.0",
+        upcoming_version="1.1.0",
+        features=[],
+        source="fallback",
+    )
     svc.submit_bug_report.return_value = SupportSubmitResult(
         local_stored=True,
         github_success=False,
@@ -67,38 +73,50 @@ class TestSupportCenterController:
         ctrl = SupportCenterController(mock_view, mock_service)
         assert ctrl is not None
 
-    def test_controller_calls_load_upcoming_updates_on_init(
+    def test_controller_calls_load_announcements_on_init(
         self, mock_view, mock_service
     ):
         SupportCenterController(mock_view, mock_service)
-        mock_service.get_upcoming_updates.assert_called_once()
+        mock_service.get_announcements.assert_called_once()
 
-    def test_controller_sets_updates_on_view(self, mock_view, mock_service):
+    def test_controller_sets_announcements_on_view(self, mock_view, mock_service):
         SupportCenterController(mock_view, mock_service)
-        mock_view.set_upcoming_updates.assert_called_once_with([])
+        mock_view.set_announcements.assert_called_once()
 
     def test_navigate_to_calls_view_navigate_to(self, mock_view, mock_service):
         ctrl = SupportCenterController(mock_view, mock_service)
         ctrl.navigate_to("report_bug")
         mock_view.navigate_to.assert_called_once_with("report_bug")
 
-    def test_on_page_changed_updates_page_loads_updates(
+    def test_on_page_changed_updates_page_loads_announcements(
         self, mock_view, mock_service
     ):
         ctrl = SupportCenterController(mock_view, mock_service)
         mock_service.reset_mock()
         mock_view.reset_mock()
         ctrl._on_page_changed("upcoming_updates")
-        mock_service.get_upcoming_updates.assert_called_once()
+        mock_service.get_announcements.assert_called_once()
 
-    def test_on_page_changed_other_pages_do_not_load_updates(
+    def test_on_page_changed_other_pages_do_not_load_announcements(
         self, mock_view, mock_service
     ):
         ctrl = SupportCenterController(mock_view, mock_service)
         mock_service.reset_mock()
         mock_view.reset_mock()
         ctrl._on_page_changed("report_bug")
-        mock_service.get_upcoming_updates.assert_not_called()
+        mock_service.get_announcements.assert_not_called()
+
+    def test_on_refresh_calls_service_and_view(self, mock_view, mock_service):
+        mock_service.refresh_announcements.return_value = AnnouncementsResult(
+            current_version="2.0", upcoming_version="2.1", features=[],
+        )
+        ctrl = SupportCenterController(mock_view, mock_service)
+        mock_service.reset_mock()
+        mock_view.reset_mock()
+        ctrl._on_refresh()
+        mock_service.refresh_announcements.assert_called_once()
+        mock_view.set_announcements.assert_called_once()
+        mock_view.set_refresh_enabled.assert_called()
 
     def test_submit_bug_creates_bug_report_and_calls_service(
         self, mock_view, mock_service

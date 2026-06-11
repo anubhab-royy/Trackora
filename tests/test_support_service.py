@@ -10,6 +10,10 @@ from services.support.support_service import (
     SupportSubmitResult,
     UpcomingUpdate,
 )
+from services.update_announcements_service import (
+    AnnouncementsResult,
+    FeatureAnnouncement,
+)
 
 
 class TestSupportService:
@@ -118,6 +122,51 @@ class TestSupportService:
             assert hasattr(item, "description")
             assert hasattr(item, "version")
             assert hasattr(item, "is_published")
+
+    def test_get_announcements_returns_result(self):
+        svc = SupportService()
+        result = svc.get_announcements()
+        assert isinstance(result, AnnouncementsResult)
+        assert result.current_version == "1.0.0"
+        assert result.upcoming_version == "1.1.0"
+        assert len(result.features) > 0
+        assert result.source == "fallback"
+
+    def test_get_announcements_delegates_to_service(self):
+        mock_svc = MagicMock()
+        mock_svc.get_announcements.return_value = AnnouncementsResult(
+            current_version="2.0", upcoming_version="2.1",
+            features=[FeatureAnnouncement(title="X", description="Y", version="2.1")],
+            source="remote",
+        )
+        svc = SupportService(announcements_service=mock_svc)
+        result = svc.get_announcements()
+        assert result.current_version == "2.0"
+        assert result.source == "remote"
+        mock_svc.get_announcements.assert_called_once()
+
+    def test_get_announcements_service_error_falls_back(self):
+        mock_svc = MagicMock()
+        mock_svc.get_announcements.side_effect = OSError("network")
+        svc = SupportService(announcements_service=mock_svc)
+        result = svc.get_announcements()
+        assert result.source == "fallback"
+        assert result.current_version != "—"
+
+    def test_refresh_announcements_delegates(self):
+        mock_svc = MagicMock()
+        mock_svc.refresh.return_value = AnnouncementsResult(
+            current_version="1.0", upcoming_version="1.1", features=[],
+        )
+        svc = SupportService(announcements_service=mock_svc)
+        result = svc.refresh_announcements()
+        assert result.source == "remote"
+        mock_svc.refresh.assert_called_once()
+
+    def test_refresh_announcements_without_service_falls_back(self):
+        svc = SupportService()
+        result = svc.refresh_announcements()
+        assert result.source == "fallback"
 
 
 class TestSupportServiceWithGitHub:

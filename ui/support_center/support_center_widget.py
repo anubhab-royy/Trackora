@@ -29,6 +29,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from services.update_announcements_service import AnnouncementsResult
+
 logger = logging.getLogger(__name__)
 
 _PAGES = ["report_bug", "suggest_feature", "feedback", "upcoming_updates"]
@@ -45,6 +47,7 @@ class SupportCenterWidget(QWidget):
 
     navigation_requested = pyqtSignal(str)
     submit_requested = pyqtSignal(str)
+    refresh_requested = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -59,7 +62,12 @@ class SupportCenterWidget(QWidget):
     # ------------------------------------------------------------------
 
     def set_upcoming_updates(self, updates: list[object]) -> None:
-        """Populate the Upcoming Updates page with update items."""
+        """Populate the Upcoming Updates page with update items.
+
+        Args:
+            updates: List of objects with .title, .description, .version, .is_published.
+                     Usually extracted from AnnouncementsResult.features.
+        """
         if self._updates_container is None:
             return
         self._clear_layout(self._updates_container)
@@ -90,6 +98,67 @@ class SupportCenterWidget(QWidget):
             card_layout.addWidget(version_label)
 
             self._updates_container.addWidget(card)
+
+    def set_announcements(self, announcements: AnnouncementsResult) -> None:
+        """Populate the Upcoming Updates page with version info + features.
+
+        Shows the current version, upcoming version, and a card for each
+        announced feature.
+        """
+        if self._updates_container is None:
+            return
+        self._clear_layout(self._updates_container)
+
+        # Version info
+        version_info = QLabel(
+            f"<b>Current version:</b> {announcements.current_version} &mdash; "
+            f"<b>Upcoming version:</b> {announcements.upcoming_version}"
+        )
+        version_info.setWordWrap(True)
+        version_info.setStyleSheet("font-size: 13px; color: #a6adc8; "
+                                   "padding: 0 0 8px 0;")
+        self._updates_container.addWidget(version_info)
+
+        source_label = QLabel(f"Source: {announcements.source}")
+        source_label.setStyleSheet("font-size: 11px; color: #6c7086; "
+                                   "padding: 0 0 4px 0;")
+        self._updates_container.addWidget(source_label)
+
+        # Features
+        features = announcements.features
+        if not features:
+            empty = QLabel("No upcoming features announced.")
+            empty.setObjectName("EmptyStateLabel")
+            self._updates_container.addWidget(empty)
+            return
+
+        for item in features:
+            card = QFrame()
+            card.setObjectName("StatCard")
+            card.setFixedHeight(100)
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(14, 10, 14, 10)
+            card_layout.setSpacing(4)
+
+            title = QLabel(item.title)
+            title.setStyleSheet("font-size: 15px; font-weight: 700;")
+            card_layout.addWidget(title)
+
+            desc = QLabel(item.description)
+            desc.setStyleSheet("font-size: 12px; color: #a6adc8;")
+            desc.setWordWrap(True)
+            card_layout.addWidget(desc)
+
+            version_label = QLabel(f"v{item.version}")
+            version_label.setStyleSheet("font-size: 11px; color: #6c7086;")
+            card_layout.addWidget(version_label)
+
+            self._updates_container.addWidget(card)
+
+    def set_refresh_enabled(self, enabled: bool) -> None:
+        """Enable or disable the refresh button."""
+        if hasattr(self, "_refresh_btn") and self._refresh_btn is not None:
+            self._refresh_btn.setEnabled(enabled)
 
     def navigate_to(self, page_key: str) -> None:
         """Programmatically navigate to a support page."""
@@ -352,6 +421,13 @@ class SupportCenterWidget(QWidget):
         intro.setStyleSheet("font-size: 13px; color: #6c7086;")
         layout.addWidget(intro)
 
+        self._refresh_btn = QPushButton("Refresh")
+        self._refresh_btn.setObjectName("SecondaryButton")
+        self._refresh_btn.setFixedHeight(32)
+        self._refresh_btn.setMaximumWidth(120)
+        self._refresh_btn.clicked.connect(self._on_refresh)
+        layout.addWidget(self._refresh_btn)
+
         self._updates_container = QVBoxLayout()
         self._updates_container.setSpacing(10)
         layout.addLayout(self._updates_container)
@@ -362,6 +438,9 @@ class SupportCenterWidget(QWidget):
 
         layout.addStretch()
         return page
+
+    def _on_refresh(self) -> None:
+        self.refresh_requested.emit()
 
     def _build_submit_section(self, page_key: str) -> QWidget:
         section = QWidget()
