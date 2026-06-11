@@ -66,7 +66,13 @@ class TestGitHubIssueService:
             expected_behavior="expected",
             actual_behavior="actual",
         )
-        with patch.object(service, "create_issue", return_value=IssueResult(success=True, issue_url="https://github.com/issue/1")):
+        with patch.object(
+            service,
+            "create_issue",
+            return_value=IssueResult(
+                success=True, issue_url="https://github.com/issue/1"
+            ),
+        ):
             result = service.submit_bug(report)
             assert isinstance(result, IssueResult)
             assert result.success is True
@@ -75,14 +81,26 @@ class TestGitHubIssueService:
         request = FeatureRequest(
             title="Feature", description="desc", use_case="uc"
         )
-        with patch.object(service, "create_issue", return_value=IssueResult(success=True, issue_url="https://github.com/issue/2")):
+        with patch.object(
+            service,
+            "create_issue",
+            return_value=IssueResult(
+                success=True, issue_url="https://github.com/issue/2"
+            ),
+        ):
             result = service.submit_feature(request)
             assert isinstance(result, IssueResult)
             assert result.success is True
 
     def test_submit_feedback_returns_issue_result(self, service):
         fb = FeedbackReport(subject="Feedback", message="msg")
-        with patch.object(service, "create_issue", return_value=IssueResult(success=True, issue_url="https://github.com/issue/3")):
+        with patch.object(
+            service,
+            "create_issue",
+            return_value=IssueResult(
+                success=True, issue_url="https://github.com/issue/3"
+            ),
+        ):
             result = service.submit_feedback(fb)
             assert isinstance(result, IssueResult)
             assert result.success is True
@@ -114,7 +132,10 @@ class TestCreateIssue:
             )
 
         assert result.success is True
-        assert result.issue_url == "https://github.com/testowner/testrepo/issues/42"
+        assert (
+            result.issue_url
+            == "https://github.com/testowner/testrepo/issues/42"
+        )
         assert result.error_message is None
 
     def test_uses_correct_api_url(self, service):
@@ -181,13 +202,14 @@ class TestHTTPErrors:
         self._assert_http_error(service, 404, "not found")
 
     def test_500_server_error(self, service):
-        self._assert_http_error(service, 500, "HTTP 500")
+        self._assert_http_error(service, 500, "http 500")
 
     def _assert_http_error(self, service, status_code: int, keyword: str):
         with patch(
             "services.support.github_issue_service.urlopen"
         ) as mock_urlopen:
             from urllib.error import HTTPError
+
             mock_urlopen.side_effect = HTTPError(
                 url="https://api.github.com/repos/owner/repo/issues",
                 code=status_code,
@@ -201,6 +223,7 @@ class TestHTTPErrors:
 
     def test_network_error_without_code(self, service):
         from urllib.error import URLError
+
         with patch(
             "services.support.github_issue_service.urlopen"
         ) as mock_urlopen:
@@ -211,6 +234,7 @@ class TestHTTPErrors:
 
     def test_timeout(self, service):
         from urllib.error import URLError
+
         with patch(
             "services.support.github_issue_service.urlopen"
         ) as mock_urlopen:

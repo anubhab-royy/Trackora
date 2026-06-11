@@ -1,5 +1,5 @@
 """
-MainWindow — Phase 10
+MainWindow — Phase 11
 Application-level window that assembles all UI views into a single
 QMainWindow with sidebar navigation.
 
@@ -8,6 +8,7 @@ Architecture:
   - Hosts them in a QStackedWidget switched by the sidebar.
   - Integrates TrayService for minimize-to-tray.
   - Provides theme toggle and export actions.
+  - Processes offline report queue on startup.
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ from services.export_service import ExportService
 from services.game_service import GameService
 from services.session_history_service import SessionHistoryService
 from services.support.github_issue_service import GitHubIssueService
+from services.support.report_queue_service import ReportQueueService
 from services.support.support_service import SupportService
 from services.tray_service import TrayService
 from trackora_stats.statistics_service import StatisticsService
@@ -93,9 +95,13 @@ class MainWindow(QMainWindow):
         self._settings_repo = settings_repo
         self._active_repo = active_sessions_repo
         self._games_repo = games_repo
+        self._queue_service = ReportQueueService()
         self._support_service = support_service or SupportService(
             github_service=GitHubIssueService(self._settings_repo),
+            queue_service=self._queue_service,
         )
+
+        self._process_report_queue()
 
         self.setWindowTitle("Trackora")
         self.setMinimumSize(1000, 650)
@@ -307,3 +313,24 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             self._theme_manager.apply_theme(app, new_theme)
+
+    # ------------------------------------------------------------------
+    # Queue processing
+    # ------------------------------------------------------------------
+
+    def _process_report_queue(self) -> None:
+        """Scan and submit any pending offline reports."""
+        pending = self._queue_service.count_pending()
+        if pending == 0:
+            return
+        logger.info("Found %d pending report(s), processing queue...", pending)
+        try:
+            result = self._support_service.process_queue()
+            if result and result.succeeded:
+                logger.info(
+                    "Queue processing complete: %d submitted, %d failed.",
+                    result.succeeded,
+                    result.failed,
+                )
+        except Exception as exc:
+            logger.error("Queue processing error: %s", exc)

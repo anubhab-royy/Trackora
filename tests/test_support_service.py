@@ -84,7 +84,7 @@ class TestSupportService:
         svc.submit_feedback(fb)
         assert fb.id is not None
 
-    def test_submit_without_github_has_no_github_result(self):
+    def test_submit_without_github_has_no_github_or_queue_result(self):
         svc = SupportService()
         report = BugReport(
             title="Test",
@@ -97,6 +97,8 @@ class TestSupportService:
         assert result.github_success is False
         assert result.github_url is None
         assert result.github_error is None
+        assert result.queued is False
+        assert result.queued_path is None
 
     def test_get_upcoming_updates_returns_list(self):
         svc = SupportService()
@@ -201,3 +203,84 @@ class TestSupportServiceWithGitHub:
         assert result.local_stored is True
         assert result.github_success is False
         assert result.github_error is not None
+
+
+class TestSupportServiceWithQueue:
+    def test_retryable_error_queues_report(self, tmp_path):
+        mock_github = MagicMock()
+        mock_github.submit_bug.return_value = MagicMock(
+            success=False,
+            issue_url=None,
+            error_message="Connection refused",
+        )
+        from services.support.report_queue_service import ReportQueueService
+        queue = ReportQueueService(storage_dir=tmp_path / "queue")
+        svc = SupportService(github_service=mock_github, queue_service=queue)
+
+        report = BugReport(
+            title="Offline Bug",
+            description="desc",
+            steps_to_reproduce="steps",
+            expected_behavior="expected",
+            actual_behavior="actual",
+        )
+        result = svc.submit_bug_report(report)
+        assert result.queued is True
+        assert result.queued_path is not None
+        assert queue.count_pending() == 1
+
+    def test_non_retryable_error_does_not_queue(self):
+        mock_github = MagicMock()
+        mock_github.submit_bug.return_value = MagicMock(
+            success=False,
+            issue_url=None,
+            error_message="Authentication failed. Check your token.",
+        )
+        svc = SupportService(github_service=mock_github)
+        report = BugReport(
+            title="Auth Bug",
+            description="desc",
+            steps_to_reproduce="steps",
+            expected_behavior="expected",
+            actual_behavior="actual",
+        )
+        result = svc.submit_bug_report(report)
+        assert result.queued is False
+        assert result.queued_path is None
+
+    def test_queue_service_exception_handled_gracefully(self):
+        mock_github = MagicMock()
+        mock_github.submit_bug.return_value = MagicMock(
+            success=False,
+            issue_url=None,
+            error_message="Connection refused",
+        )
+        mock_queue = MagicMock()
+        mock_queue.save_report.side_effect = OSError("Disk full")
+        svc = SupportService(github_service=mock_github, queue_service=mock_queue)
+
+        report = BugReport(
+            title="Disk Full Bug",
+            description="desc",
+            steps_to_reproduce="steps",
+            expected_behavior="expected",
+            actual_behavior="actual",
+        )
+        result = svc.submit_bug_report(report)
+        assert result.queued is False
+        assert result.local_stored is True
+
+    def test_process_queue_delegates_to_queue_service(self):
+        mock_queue = MagicMock()
+        mock_queue.process_queue.return_value = MagicMock(
+            attempted=2, succeeded=2, failed=0
+        )
+        svc = SupportService(queue_service=mock_queue)
+        result = svc.process_queue()
+        assert result.attempted == 2
+        assert result.succeeded == 2
+        mock_queue.process_queue.assert_called_once()
+
+    def test_process_queue_returns_none_without_queue_service(self):
+        svc = SupportService()
+        assert svc.process_queue() is None

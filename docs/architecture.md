@@ -195,14 +195,20 @@ Architecture:
 
 models/support/ — Domain dataclasses (BugReport, FeatureRequest, FeedbackReport)
 
-services/support/ — SupportService facade + GitHubIssueService (GitHub REST API)
+services/support/ — SupportService facade + GitHubIssueService (GitHub REST API) + ReportQueueService (offline queue)
 
 ui/support_center/ — SupportCenterView + SupportCenterController (navigation + form submission)
 
-Components:
+Components detail:
 
 * GitHubIssueService — creates GitHub Issues via REST API (POST /repos/{owner}/{repo}/issues)
-* SupportService — orchestrates local storage + GitHub submission
+  Labels: bug, feature-request, feedback
+  Error handling: 401 (auth), 403 (rate limit), 404 (repo), network errors
+* SupportService — orchestrates local storage + GitHub submission + offline queue
+  Returns SupportSubmitResult with local_stored, github_success, queued
+* ReportQueueService — persistent offline queue for transient failures
+  Storage: %APPDATA%/Trackora/pending_reports/ (atomic JSON writes)
+  On startup: auto-submits queued reports, deletes on success, keeps on failure
 * SupportCenterController — handles form validation, submission, and result display
 
 Settings keys (stored in database via SettingsRepository):
@@ -211,13 +217,22 @@ Settings keys (stored in database via SettingsRepository):
 * github_repo_owner   — GitHub username or organisation that owns the target repository
 * github_repo_name    — Repository name to create issues in
 
-Error handling:
+Offline queue flow:
 
-* Network failures     → user message: "Could not connect to GitHub."
-* HTTP 401             → user message: "Authentication failed. Check your token."
-* HTTP 403             → user message: "Rate limit reached or access denied."
-* HTTP 404             → user message: "Repository not found. Check owner/name."
-* Missing config       → local-only storage with informational message
+1. User submits a report via the UI.
+2. SupportService stores locally and attempts GitHub submission.
+3. If GitHub fails with a retryable error (network, timeout, rate limit), ReportQueueService saves the report as a JSON file atomically (write to .tmp, rename to .json).
+4. Non-retryable errors (auth, config, repo not found) are NOT queued.
+5. On next startup, MainWindow._process_report_queue() triggers SupportService.process_queue().
+6. Each queued JSON file is read, the domain model is reconstructed, and GitHubIssueService is called.
+7. Successful submissions delete the JSON file. Failed submissions remain for retry.
+
+Queue guarantees:
+
+* Atomic writes: never a partial file visible to readers.
+* Crash-safe: orphaned .tmp files are cleaned on service initialisation.
+* No duplication: UUID-based filenames ensure uniqueness.
+* Detailed logging at every step.
 
 Dependencies:
 

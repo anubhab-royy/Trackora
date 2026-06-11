@@ -144,8 +144,10 @@ class GitHubIssueService:
         repo = self._settings_repo.get_value(_GITHUB_SETTINGS_REPO)
         cfg = GitHubConfig(token=token, repo_owner=owner, repo_name=repo)
         if not cfg.is_valid:
-            logger.warning("GitHub config incomplete: token=%(t)r owner=%(o)r repo=%(r)r",
-                           {"t": bool(token), "o": owner, "r": repo})
+            logger.warning(
+                "GitHub config incomplete: token=%(t)r owner=%(o)r repo=%(r)r",
+                {"t": bool(token), "o": owner, "r": repo},
+            )
             return None
         return cfg
 
