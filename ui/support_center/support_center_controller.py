@@ -43,6 +43,7 @@ class SupportCenterController:
     def _connect_signals(self) -> None:
         self._view.navigation_requested.connect(self._on_page_changed)
         self._view.submit_requested.connect(self._on_submit)
+        self._view.refresh_requested.connect(self._on_refresh)
 
     def _on_page_changed(self, page_key: str) -> None:
         logger.debug("Support page changed: %s", page_key)
@@ -153,10 +154,21 @@ class SupportCenterController:
 
     def _load_upcoming_updates(self) -> None:
         try:
-            updates = self._service.get_upcoming_updates()
-            self._view.set_upcoming_updates(updates)
+            announcements = self._service.get_announcements()
+            self._view.set_announcements(announcements)
         except Exception as exc:
             logger.error("Failed to load upcoming updates: %s", exc)
+
+    def _on_refresh(self) -> None:
+        """Force-refresh announcements from remote."""
+        self._view.set_refresh_enabled(False)
+        try:
+            announcements = self._service.refresh_announcements()
+            self._view.set_announcements(announcements)
+        except Exception as exc:
+            logger.warning("Refresh failed: %s", exc)
+        finally:
+            self._view.set_refresh_enabled(True)
 
     def navigate_to(self, page: str) -> None:
         """Programmatically navigate to a support page.

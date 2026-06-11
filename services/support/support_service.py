@@ -14,6 +14,11 @@ from uuid import uuid4
 from models.support.bug_report import BugReport
 from models.support.feature_request import FeatureRequest
 from models.support.feedback_report import FeedbackReport
+from services.update_announcements_service import (
+    AnnouncementsResult,
+    FeatureAnnouncement,
+    UpdateAnnouncementsService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +89,11 @@ class SupportService:
         self,
         github_service: object | None = None,
         queue_service: object | None = None,
+        announcements_service: UpdateAnnouncementsService | None = None,
     ) -> None:
         self._github_service = github_service
         self._queue_service = queue_service
+        self._announcements_service = announcements_service
         self._bug_reports: list[BugReport] = []
         self._feature_requests: list[FeatureRequest] = []
         self._feedback_reports: list[FeedbackReport] = []
@@ -279,37 +286,84 @@ class SupportService:
         return mapping.get(github_method, "unknown")
 
     # ------------------------------------------------------------------
-    # Upcoming updates (static roadmap)
+    # Upcoming announcements
     # ------------------------------------------------------------------
 
     def get_upcoming_updates(self) -> list[UpcomingUpdate]:
-        """Return a list of planned or published updates."""
+        """Return the feature list from announcements.
+
+        Extracted from AnnouncementsResult for backward compatibility.
+        """
+        result = self.get_announcements()
         return [
             UpcomingUpdate(
-                title="Support Center Launch",
-                description="Centralized hub for bug reports, feature requests, and feedback.",
-                version="1.1.0",
-                is_published=False,
-            ),
-            UpcomingUpdate(
-                title="GitHub Integration",
-                description="Submit bug reports and feature requests directly to GitHub Issues.",
-                version="1.2.0",
-                is_published=True,
-            ),
-            UpcomingUpdate(
-                title="Offline Report Queue",
-                description="Reports are saved locally when offline and auto-submitted on next launch.",
-                version="1.2.0",
-                is_published=True,
-            ),
-            UpcomingUpdate(
-                title="Enhanced Statistics Export",
-                description="Export detailed statistics including charts and trends.",
-                version="1.3.0",
-                is_published=False,
-            ),
+                title=f.title,
+                description=f.description,
+                version=f.version,
+                is_published=f.is_published,
+            )
+            for f in result.features
         ]
+
+    def refresh_announcements(self) -> AnnouncementsResult:
+        """Force a remote refresh of announcements.
+
+        Raises the underlying exception on failure (caller should handle it).
+        """
+        if self._announcements_service is not None:
+            result = self._announcements_service.refresh()
+            return result
+        return self.get_announcements()
+
+    def get_announcements(self) -> AnnouncementsResult:
+        """Return full announcements including current/upcoming versions.
+
+        Delegates to UpdateAnnouncementsService if configured;
+        otherwise returns a hardcoded fallback so the UI is never empty.
+        """
+        if self._announcements_service is not None:
+            try:
+                return self._announcements_service.get_announcements()
+            except Exception as exc:
+                logger.warning(
+                    "Announcements service error: %s", exc
+                )
+
+        return AnnouncementsResult(
+            current_version="1.0.0",
+            upcoming_version="1.1.0",
+            features=[
+                FeatureAnnouncement(
+                    title="Support Center Launch",
+                    description="Centralized hub for bug reports, "
+                                "feature requests, and feedback.",
+                    version="1.1.0",
+                    is_published=False,
+                ),
+                FeatureAnnouncement(
+                    title="GitHub Integration",
+                    description="Submit bug reports and feature requests "
+                                "directly to GitHub Issues.",
+                    version="1.2.0",
+                    is_published=True,
+                ),
+                FeatureAnnouncement(
+                    title="Offline Report Queue",
+                    description="Reports are saved locally when offline "
+                                "and auto-submitted on next launch.",
+                    version="1.2.0",
+                    is_published=True,
+                ),
+                FeatureAnnouncement(
+                    title="Enhanced Statistics Export",
+                    description="Export detailed statistics including "
+                                "charts and trends.",
+                    version="1.3.0",
+                    is_published=False,
+                ),
+            ],
+            source="fallback",
+        )
 
 
 # Module-level helper for reconstructing models during queue processing.

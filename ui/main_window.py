@@ -48,6 +48,7 @@ from services.support.github_issue_service import GitHubIssueService
 from services.support.report_queue_service import ReportQueueService
 from services.support.support_service import SupportService
 from services.tray_service import TrayService
+from services.update_announcements_service import UpdateAnnouncementsService
 from tracker.tracking_state import TrackingState
 from trackora_stats.statistics_service import StatisticsService
 from ui.crash_dialog import CrashDialog
@@ -109,9 +110,13 @@ class MainWindow(QMainWindow):
         self._crash_service = CrashService(self._diagnostic_service)
         self._github_service = GitHubIssueService(self._settings_repo)
         self._queue_service = ReportQueueService()
+        self._announcements_service = UpdateAnnouncementsService(
+            remote_url=self._get_announcements_url(),
+        )
         self._support_service = support_service or SupportService(
             github_service=self._github_service,
             queue_service=self._queue_service,
+            announcements_service=self._announcements_service,
         )
 
         self._check_for_crashes()
@@ -399,3 +404,20 @@ class MainWindow(QMainWindow):
             parent=self,
         )
         dialog.exec()
+
+    # ------------------------------------------------------------------
+    # Announcements URL
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _get_announcements_url() -> str:
+        """Return the remote URL for update announcements.
+
+        The URL and JSON format are configured separately from the
+        codebase.  This method exists so it can be overridden or
+        replaced with a user-configurable setting in the future.
+        """
+        return (
+            "https://raw.githubusercontent.com/"
+            "anomalco/trackora-announcements/main/announcements.json"
+        )

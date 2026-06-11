@@ -11,14 +11,21 @@ from services.support.github_issue_service import GitHubIssueService
 from services.support.report_queue_service import ReportQueueService
 from services.support.support_service import SupportService
 from services.tray_service import TrayService
+from services.update_announcements_service import (
+    AnnouncementsResult,
+    FeatureAnnouncement,
+    UpdateAnnouncementsService,
+)
 from services.update_service import UpdateService
 
 __all__ = [
+    "AnnouncementsResult",
     "CrashReport",
     "CrashResult",
     "CrashService",
     "DiagnosticService",
     "ExportService",
+    "FeatureAnnouncement",
     "GameService",
     "GitHubIssueService",
     "LoggingService",
@@ -29,5 +36,6 @@ __all__ = [
     "StartupStateManager",
     "SupportService",
     "TrayService",
+    "UpdateAnnouncementsService",
     "UpdateService",
 ]

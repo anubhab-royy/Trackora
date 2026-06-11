@@ -203,14 +203,21 @@ ui/support_center/ — SupportCenterView + SupportCenterController (navigation +
 Components detail:
 
 * GitHubIssueService — creates GitHub Issues via REST API (POST /repos/{owner}/{repo}/issues)
-  Labels: bug, feature-request, feedback
+  Labels: bug, feature-request, feedback, crash
   Error handling: 401 (auth), 403 (rate limit), 404 (repo), network errors
 * SupportService — orchestrates local storage + GitHub submission + offline queue
   Returns SupportSubmitResult with local_stored, github_success, queued
+  Delegates announcements to UpdateAnnouncementsService (optional)
 * ReportQueueService — persistent offline queue for transient failures
   Storage: %APPDATA%/Trackora/pending_reports/ (atomic JSON writes)
   On startup: auto-submits queued reports, deletes on success, keeps on failure
-* SupportCenterController — handles form validation, submission, and result display
+* UpdateAnnouncementsService — fetches, caches, and serves upcoming-version announcements
+  Source: Remote GitHub JSON (configurable URL)
+  Cache: %APPDATA%/Trackora/update_announcements_cache.json (atomic writes)
+  Fallback: static hardcoded data when offline and no cache
+  Structure: { "current_version": "1.1.0", "upcoming_version": "1.2.0", "features": [...] }
+  Error handling: network failure → cache → static fallback; invalid JSON → ValueError; cache corruption → ignored
+* SupportCenterController — handles form validation, submission, refresh, and result display
 
 Settings keys (stored in database via SettingsRepository):
 
