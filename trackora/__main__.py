@@ -22,6 +22,7 @@ from database.repositories import (
     SessionsRepository,
     SettingsRepository,
 )
+from services.database_migration_service import DatabaseMigrationService
 from services.export_service import ExportService
 from services.game_service import GameService
 from services.logging_service import LoggingService
@@ -50,6 +51,28 @@ def main() -> None:
 
     db_path = _get_db_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Run migration BEFORE initializing the database.
+    # This ensures old data is found and migrated even if the installer
+    # failed to copy the data (see production bug #1).
+    migration_svc = DatabaseMigrationService(db_path)
+    migration_result = migration_svc.migrate_if_needed()
+    if migration_result.success:
+        logger.info(
+            "Database migrated from %s. Tables before: %s — after: %s",
+            migration_result.source_path,
+            migration_result.tables_before,
+            migration_result.tables_after,
+        )
+    elif migration_result.errors:
+        logger.error(
+            "Migration failed: %s. Backup at %s",
+            migration_result.errors,
+            migration_result.backup_path,
+        )
+    else:
+        logger.debug("Migration check: %s", migration_result.action)
+
     db = DatabaseManager(str(db_path))
     db.initialize()
     conn = db.connection

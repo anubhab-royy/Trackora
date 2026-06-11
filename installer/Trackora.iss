@@ -240,16 +240,27 @@ end;
 
 // ---------------------------------------------------------------------------
 // Migrate user data from %APPDATA%\GameTracker to %APPDATA%\Trackora
-// Only migrates if old path exists and new path does not.
+//
+// Strategy:
+//   Scenario A — Target directory does NOT exist:
+//       Rename old -> new (fastest, preserves everything).
+//   Scenario B — Target directory exists but trackora.db does NOT:
+//       Copy old files into target directory.
+//   Scenario C — Target directory AND trackora.db exist:
+//       Skip (the application will decide whether migration is needed).
+//
+// The application (DatabaseMigrationService) is the authoritative safety
+// net — it handles all edge cases even if the installer skips.
 // ---------------------------------------------------------------------------
 procedure MigrateAppData;
 var
-  OldDataDir, NewDataDir, Quote: string;
+  OldDataDir, NewDataDir, TargetDbFile, Quote: string;
   ResultCode: Integer;
 begin
   Quote := '"';
   OldDataDir := ExpandConstant('{userappdata}\' + OldAppNameConst);
   NewDataDir := ExpandConstant('{userappdata}\{#MyAppShortName}');
+  TargetDbFile := NewDataDir + '\trackora.db';
 
   if not DirExists(OldDataDir) then
   begin
@@ -257,30 +268,38 @@ begin
     Exit;
   end;
 
-  if DirExists(NewDataDir) then
+  // Scenario C: new directory exists AND database file exists — let the
+  // application handle deciding whether migration is actually needed.
+  if DirExists(NewDataDir) and FileExists(TargetDbFile) then
   begin
-    Log('New AppData already exists, skipping migration.');
+    Log('Target directory and database already exist — deferring to application migration.');
     Exit;
   end;
 
   Log('Migrating data: ' + OldDataDir + ' -> ' + NewDataDir);
 
-  if RenameFile(OldDataDir, NewDataDir) then
+  // Scenario A: target directory does not exist — simple rename.
+  if not DirExists(NewDataDir) then
   begin
-    Log('Migration successful (RenameFile).');
+    if RenameFile(OldDataDir, NewDataDir) then
+    begin
+      Log('Migration successful (RenameFile).');
+      Exit;
+    end;
+
+    Log('RenameFile failed. Will attempt copy instead.');
+  end;
+
+  // Scenario B: target exists but database file does not — xcopy.
+  Log('Copying old data into existing target directory...');
+  if Exec(ExpandConstant('{cmd}'), '/c xcopy ' + Quote + OldDataDir + '\*' + Quote + ' ' + Quote + NewDataDir + '\' + Quote + ' /e /i /h /k /y', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+  begin
+    Log('xcopy succeeded. Removing old directory...');
+    Exec(ExpandConstant('{cmd}'), '/c rmdir /s /q ' + Quote + OldDataDir + Quote, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Log('Migration completed via copy.');
   end
   else
-  begin
-    Log('RenameFile failed. Trying xcopy fallback...');
-    if Exec(ExpandConstant('{cmd}'), '/c xcopy ' + Quote + OldDataDir + '\*' + Quote + ' ' + Quote + NewDataDir + '\' + Quote + ' /e /i /h /k /y', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
-    begin
-      Log('xcopy succeeded. Removing old directory...');
-      Exec(ExpandConstant('{cmd}'), '/c rmdir /s /q ' + Quote + OldDataDir + Quote, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-      Log('Migration completed via xcopy.');
-    end
-    else
-      Log('WARNING: Migration failed. Old data preserved at: ' + OldDataDir);
-  end;
+    Log('WARNING: Migration failed. Old data preserved at: ' + OldDataDir);
 end;
 
 // ---------------------------------------------------------------------------
