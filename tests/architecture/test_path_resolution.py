@@ -7,7 +7,9 @@ each runtime environment.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -35,16 +37,25 @@ def appdata_cleanup():
 
 
 class TestEnvironmentSelection:
-    def test_default_is_production(self):
+    def test_source_code_defaults_to_development(self):
         saved = os.environ.pop("APP_ENV", None)
         try:
             import importlib
             import trackora.core.environment as env_mod
             importlib.reload(env_mod)
-            assert env_mod.CURRENT_ENVIRONMENT == env_mod.Environment.PRODUCTION
+            assert not env_mod._is_frozen()
+            assert env_mod.CURRENT_ENVIRONMENT == env_mod.Environment.DEVELOPMENT
         finally:
             if saved is not None:
                 os.environ["APP_ENV"] = saved
+
+    def test_frozen_defaults_to_production(self, env_cleanup):
+        import importlib
+        import trackora.core.environment as env_mod
+        with patch.object(sys, "frozen", True, create=True):
+            importlib.reload(env_mod)
+            assert env_mod._is_frozen()
+            assert env_mod.CURRENT_ENVIRONMENT == env_mod.Environment.PRODUCTION
 
     def test_development_environment(self, env_cleanup):
         os.environ["APP_ENV"] = "development"
@@ -52,6 +63,13 @@ class TestEnvironmentSelection:
         import trackora.core.environment as env_mod
         importlib.reload(env_mod)
         assert env_mod.CURRENT_ENVIRONMENT == env_mod.Environment.DEVELOPMENT
+
+    def test_explicit_app_env_overrides_default(self, env_cleanup):
+        os.environ["APP_ENV"] = "production"
+        import importlib
+        import trackora.core.environment as env_mod
+        importlib.reload(env_mod)
+        assert env_mod.CURRENT_ENVIRONMENT == env_mod.Environment.PRODUCTION
 
     def test_invalid_fallback_to_production(self, env_cleanup):
         os.environ["APP_ENV"] = "invalid_value"
