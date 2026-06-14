@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import shutil
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -29,6 +28,7 @@ from uuid import uuid4
 from models.support.bug_report import BugReport
 from models.support.feature_request import FeatureRequest
 from models.support.feedback_report import FeedbackReport
+from trackora.core.paths import BASE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +46,8 @@ _GITHUB_METHOD_MAP: dict[str, str] = {
 
 
 def _default_storage_dir() -> Path:
-    """Return %APPDATA%/Trackora/pending_reports/ with fallback."""
-    appdata = os.environ.get("APPDATA")
-    if appdata:
-        base = Path(appdata) / "Trackora"
-    else:
-        base = Path.home() / ".local" / "share" / "Trackora"
-    return base / "pending_reports"
+    """Return BASE_DIR/pending_reports/ via trackora.core.paths."""
+    return BASE_DIR / "pending_reports"
 
 
 @dataclass

@@ -400,7 +400,6 @@ class TestSerialization:
 
 
 class TestDefaultCacheDir:
-    def test_returns_path(self):
+    def test_returns_path_object(self):
         d = UpdateAnnouncementsService._default_cache_dir()
         assert isinstance(d, Path)
-        assert "Trackora" in d.parts

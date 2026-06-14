@@ -50,6 +50,8 @@ from services.support.support_service import SupportService
 from services.tray_service import TrayService
 from services.update_announcements_service import UpdateAnnouncementsService
 from tracker.tracking_state import TrackingState
+from trackora.core.build_info import BUILD_CHANNEL
+from trackora.core.environment import Environment
 from trackora_stats.statistics_service import StatisticsService
 from ui.crash_dialog import CrashDialog
 from ui.dashboard.dashboard_controller import DashboardController
@@ -124,7 +126,7 @@ class MainWindow(QMainWindow):
 
         self._process_report_queue()
 
-        self.setWindowTitle("Trackora")
+        self.setWindowTitle(self._window_title())
         self.setMinimumSize(1000, 650)
         self.resize(1200, 750)
 
@@ -161,7 +163,10 @@ class MainWindow(QMainWindow):
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(0)
 
-        title = QLabel("Trackora")
+        suffix = {
+            Environment.DEVELOPMENT: " [DEV]",
+        }.get(BUILD_CHANNEL, "")
+        title = QLabel(f"Trackora{suffix}")
         title.setObjectName("AppTitle")
         sidebar_layout.addWidget(title)
 
@@ -411,6 +416,13 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Announcements URL
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _window_title() -> str:
+        suffix = {
+            Environment.DEVELOPMENT: " [DEV]",
+        }.get(BUILD_CHANNEL, "")
+        return f"Trackora{suffix}"
 
     @staticmethod
     def _get_announcements_url() -> str:

@@ -165,14 +165,10 @@ class TestDiagnosticServiceSaveAndSerialize:
 
 
 class TestDefaultLogDir:
-    def test_returns_path_object(self):
+    def test_returns_path_like_object(self):
         d = DiagnosticService._default_log_dir()
         assert isinstance(d, Path)
-        assert "Trackora" in d.parts
-
-    def test_contains_logs(self):
-        d = DiagnosticService._default_log_dir()
-        assert "logs" in d.parts
+        assert d.name == "logs"
 
 
 class TestGetAppVersion:

@@ -22,17 +22,26 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from trackora.core.build_info import BUILD_CHANNEL
+from trackora.core.environment import Environment
+
 logger = logging.getLogger(__name__)
 
 _AUTOSTART_DIR = Path.home() / ".config" / "autostart"
 _DESKTOP_FILE_TEMPLATE = """\
 [Desktop Entry]
 Type=Application
-Name=Trackora
+Name=Trackora{channel_suffix}
 Exec={executable}
 Terminal=false
 X-GNOME-Autostart-enabled=true
 """
+
+
+def _env_suffix() -> str:
+    return {
+        Environment.DEVELOPMENT: " [DEV]",
+    }.get(BUILD_CHANNEL, "")
 
 
 def _get_app_path() -> str:
@@ -116,7 +125,7 @@ class StartupService:
 # ---------------------------------------------------------------------------
 
 _REG_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-_REG_VALUE = "Trackora"
+_REG_VALUE = f"Trackora{_env_suffix()}"
 
 
 def _windows_is_registered() -> bool:
@@ -163,7 +172,7 @@ def _windows_unregister() -> bool:
 # Linux implementation (XDG autostart .desktop file)
 # ---------------------------------------------------------------------------
 
-_DESKTOP_FILE = _AUTOSTART_DIR / "Trackora.desktop"
+_DESKTOP_FILE = _AUTOSTART_DIR / f"Trackora{_env_suffix()}.desktop"
 
 
 def _linux_is_registered() -> bool:
@@ -173,7 +182,10 @@ def _linux_is_registered() -> bool:
 def _linux_register() -> bool:
     try:
         _AUTOSTART_DIR.mkdir(parents=True, exist_ok=True)
-        content = _DESKTOP_FILE_TEMPLATE.format(executable=_get_app_path())
+        content = _DESKTOP_FILE_TEMPLATE.format(
+            executable=_get_app_path(),
+            channel_suffix=_env_suffix(),
+        )
         _DESKTOP_FILE.write_text(content, encoding="utf-8")
         _DESKTOP_FILE.chmod(0o755)
         logger.info("Linux auto-start registered: %s", _DESKTOP_FILE)

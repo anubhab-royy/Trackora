@@ -12,6 +12,7 @@ import logging
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -19,6 +20,9 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from trackora.core.build_info import BUILD_CHANNEL, BUILD_VERSION
+from trackora.core.paths import BASE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +67,7 @@ class SettingsView(QWidget):
         root_layout.addWidget(self._build_appearance_group())
         root_layout.addWidget(self._build_startup_group())
         root_layout.addWidget(self._build_data_group())
+        root_layout.addWidget(self._build_about_group())
         root_layout.addStretch()
 
     def _build_appearance_group(self) -> QGroupBox:
@@ -74,6 +79,29 @@ class SettingsView(QWidget):
         self._theme_check.setChecked(True)
         self._theme_check.toggled.connect(self.theme_toggled.emit)
         layout.addWidget(self._theme_check)
+
+        return group
+
+    def _build_about_group(self) -> QGroupBox:
+        group = QGroupBox("About")
+        layout = QFormLayout(group)
+        layout.setSpacing(8)
+
+        channel_label = QLabel({
+            "production": "Production",
+            "development": "Development",
+        }.get(BUILD_CHANNEL, BUILD_CHANNEL))
+        channel_label.setTextInteractionFlags(channel_label.textInteractionFlags())
+        layout.addRow("Build Channel:", channel_label)
+
+        version_label = QLabel(BUILD_VERSION)
+        version_label.setTextInteractionFlags(version_label.textInteractionFlags())
+        layout.addRow("Version:", version_label)
+
+        data_label = QLabel(str(BASE_DIR))
+        data_label.setWordWrap(True)
+        data_label.setTextInteractionFlags(data_label.textInteractionFlags())
+        layout.addRow("Data Directory:", data_label)
 
         return group
 

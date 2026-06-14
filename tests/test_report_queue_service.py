@@ -9,8 +9,8 @@ import pytest
 from services.support.report_queue_service import (
     QueueProcessResult,
     ReportQueueService,
-    _default_storage_dir,
 )
+from trackora.core.paths import BASE_DIR
 
 
 @pytest.fixture
@@ -18,23 +18,8 @@ def queue(tmp_path: Path) -> ReportQueueService:
     return ReportQueueService(storage_dir=tmp_path / "pending_reports")
 
 
-class TestDefaultStorageDir:
-    def test_uses_appdata_when_set(self):
-        import os
-        os.environ["APPDATA"] = "C:\\Users\\Test\\AppData\\Roaming"
-        path = _default_storage_dir()
-        assert "AppData\\Roaming\\Trackora\\pending_reports" in str(path)
 
-    def test_falls_back_when_appdata_not_set(self):
-        import os
-        saved = os.environ.pop("APPDATA", None)
-        try:
-            path = _default_storage_dir()
-            assert "Trackora" in str(path)
-            assert "pending_reports" in str(path)
-        finally:
-            if saved is not None:
-                os.environ["APPDATA"] = saved
+
 
 
 class TestSaveReport:

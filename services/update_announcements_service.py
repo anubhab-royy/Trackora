@@ -16,6 +16,8 @@ from typing import Any
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+from trackora.core.paths import BASE_DIR
+
 logger = logging.getLogger(__name__)
 
 _REMOTE_TIMEOUT_SECONDS = 10
@@ -264,13 +266,4 @@ class UpdateAnnouncementsService:
 
     @staticmethod
     def _default_cache_dir() -> Path:
-        import os as _os
-        if _os.name == "nt":
-            base = Path(
-                _os.environ.get(
-                    "APPDATA", Path.home() / "AppData" / "Roaming"
-                )
-            )
-        else:
-            base = Path.home() / ".local" / "share"
-        return base / "Trackora"
+        return BASE_DIR

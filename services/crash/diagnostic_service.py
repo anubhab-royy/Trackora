@@ -16,6 +16,7 @@ from typing import Any
 from uuid import uuid4
 
 from trackora import __version__
+from trackora.core.paths import LOGS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -184,8 +185,4 @@ class DiagnosticService:
 
     @staticmethod
     def _default_log_dir() -> Path:
-        if os.name == "nt":
-            base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
-        else:
-            base = Path.home() / ".local" / "share"
-        return base / "Trackora" / "logs"
+        return LOGS_DIR

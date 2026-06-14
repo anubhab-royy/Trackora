@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from services.crash.diagnostic_service import CrashReport, DiagnosticService
+from trackora.core.paths import BASE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -139,11 +140,7 @@ class StartupStateManager:
 
     @staticmethod
     def _default_storage_dir() -> Path:
-        if os.name == "nt":
-            base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
-        else:
-            base = Path.home() / ".local" / "share"
-        return base / "Trackora"
+        return BASE_DIR
 
 
 class CrashService:

@@ -26,6 +26,9 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QObject, pyqtSignal
+
+from trackora.core.build_info import BUILD_CHANNEL
+from trackora.core.environment import Environment
 from PyQt6.QtGui import QAction, QIcon, QPixmap
 from PyQt6.QtWidgets import QMenu, QSystemTrayIcon, QWidget
 
@@ -77,7 +80,10 @@ class TrayService(QObject):
         icon = self._load_icon()
 
         self._tray_icon = QSystemTrayIcon(icon, self._window)
-        self._tray_icon.setToolTip("Trackora")
+        suffix = {
+            Environment.DEVELOPMENT: " [DEV]",
+        }.get(BUILD_CHANNEL, "")
+        self._tray_icon.setToolTip(f"Trackora{suffix}")
 
         menu = self._build_menu()
         self._tray_icon.setContextMenu(menu)

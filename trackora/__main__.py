@@ -8,9 +8,7 @@ with a QApplication, main window, system tray, and background process monitor.
 from __future__ import annotations
 
 import logging
-import os
 import sys
-from pathlib import Path
 
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
@@ -27,6 +25,9 @@ from services.game_service import GameService
 from services.logging_service import LoggingService
 from services.session_history_service import SessionHistoryService
 from services.startup_service import StartupService
+from trackora.core.paths import DATABASE_PATH, ensure_dirs
+from trackora.core.single_instance import acquire as _acquire_lock
+from trackora.core.single_instance import release as _release_lock
 from trackora_stats.playtime_calculator import PlaytimeCalculator
 from trackora_stats.statistics_service import StatisticsService
 from tracker import (
@@ -44,13 +45,25 @@ def main() -> None:
     LoggingService.setup()
     logger = logging.getLogger(__name__)
 
+    if not _acquire_lock():
+        logger.warning("Another Trackora instance is already running.")
+        _app = QApplication(sys.argv)
+        from PyQt6.QtWidgets import QMessageBox
+        QMessageBox.warning(
+            None, "Trackora",
+            "Another instance of Trackora is already running.",
+        )
+        sys.exit(1)
+
+    import atexit
+    atexit.register(_release_lock)
+
     app = QApplication(sys.argv)
     app.setApplicationName("Trackora")
     app.setOrganizationName("Trackora")
 
-    db_path = _get_db_path()
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    db = DatabaseManager(str(db_path))
+    ensure_dirs()
+    db = DatabaseManager(str(DATABASE_PATH))
     db.initialize()
     conn = db.connection
 
@@ -125,24 +138,8 @@ def main() -> None:
     process_monitor.start()
     window.show()
 
-    logger.info("Trackora started — database: %s", db_path)
+    logger.info("Trackora started — database: %s", DATABASE_PATH)
     sys.exit(app.exec())
-
-
-def _get_db_path() -> Path:
-    """Return the database path.
-
-    On Windows:  %APPDATA%/Trackora/trackora.db
-    On Linux:     ~/.trackora/trackora.db
-    When frozen:  same as above (never next to the executable).
-    """
-    if os.name == "nt":
-        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
-    else:
-        base = Path.home()
-        base = base / ".trackora"
-        return base / "trackora.db"
-    return base / "Trackora" / "trackora.db"
 
 
 if __name__ == "__main__":
