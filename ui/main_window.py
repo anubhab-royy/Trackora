@@ -46,6 +46,7 @@ from services.game_service import GameService
 from services.session_history_service import SessionHistoryService
 from services.support.github_issue_service import GitHubIssueService
 from services.support.report_queue_service import ReportQueueService
+from services.support.reporting_interface import AbstractReportService
 from services.support.support_service import SupportService
 from services.tray_service import TrayService
 from services.update_announcements_service import UpdateAnnouncementsService
@@ -108,9 +109,11 @@ class MainWindow(QMainWindow):
 
         # Crash detection — check PREVIOUS session's state before
         # overwriting with this session's "running" marker.
+        # github_service currently uses GitHubIssueService; swap
+        # with any AbstractReportService backend (e.g. Supabase).
         self._diagnostic_service = DiagnosticService()
         self._crash_service = CrashService(self._diagnostic_service)
-        self._github_service = GitHubIssueService(self._settings_repo)
+        self._github_service: AbstractReportService = GitHubIssueService(self._settings_repo)
         self._queue_service = ReportQueueService()
         self._announcements_service = UpdateAnnouncementsService(
             remote_url=self._get_announcements_url(),

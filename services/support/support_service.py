@@ -1,7 +1,7 @@
 """
 SupportService — orchestrates support operations.
 
-Stores submissions locally, submits to GitHub via GitHubIssueService,
+Stores submissions locally, submits via an AbstractReportService backend,
 and queues failed submissions for retry via ReportQueueService.
 """
 
@@ -14,6 +14,7 @@ from uuid import uuid4
 from models.support.bug_report import BugReport
 from models.support.feature_request import FeatureRequest
 from models.support.feedback_report import FeedbackReport
+from services.support.reporting_interface import AbstractReportService
 from services.update_announcements_service import (
     AnnouncementsResult,
     FeatureAnnouncement,
@@ -77,7 +78,8 @@ class SupportService:
     """Service interface for support center operations.
 
     Stores submissions in memory, optionally forwards them
-    to GitHub Issues, and queues failed submissions for retry.
+    to a report backend (e.g. GitHub Issue service), and queues
+    failed submissions for offline retry.
 
     Architecture rules:
     - No UI imports.
@@ -87,7 +89,7 @@ class SupportService:
 
     def __init__(
         self,
-        github_service: object | None = None,
+        github_service: AbstractReportService | None = None,
         queue_service: object | None = None,
         announcements_service: UpdateAnnouncementsService | None = None,
     ) -> None:

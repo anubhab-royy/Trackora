@@ -3,6 +3,8 @@ GitHubIssueService — GitHub REST API integration for support submissions.
 
 Submits bug reports, feature requests, and feedback as GitHub Issues.
 Reads authentication and repository configuration from SettingsRepository.
+
+Implements *AbstractReportService* from *reporting_interface*.
 """
 
 from __future__ import annotations
@@ -10,7 +12,6 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -19,6 +20,11 @@ from database.repositories.settings_repository import SettingsRepository
 from models.support.bug_report import BugReport
 from models.support.feature_request import FeatureRequest
 from models.support.feedback_report import FeedbackReport
+from services.support.reporting_interface import (
+    AbstractReportService,
+    ReportType,
+    SubmitResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,19 +34,9 @@ _GITHUB_SETTINGS_TOKEN = "github_token"
 _GITHUB_SETTINGS_OWNER = "github_repo_owner"
 _GITHUB_SETTINGS_REPO = "github_repo_name"
 
-
-class IssueType(Enum):
-    BUG = "bug"
-    FEATURE = "feature-request"
-    FEEDBACK = "feedback"
-    CRASH = "crash"
-
-
-@dataclass
-class IssueResult:
-    success: bool
-    issue_url: str | None = None
-    error_message: str | None = None
+# Backward-compatible aliases — prefer ReportType / SubmitResult in new code.
+IssueType = ReportType
+IssueResult = SubmitResult
 
 
 @dataclass
@@ -61,7 +57,7 @@ class GitHubConfig:
         return bool(self.token and self.repo_owner and self.repo_name)
 
 
-class GitHubIssueService:
+class GitHubIssueService(AbstractReportService):
     """Creates GitHub Issues from Trackora support submissions.
 
     Args:
@@ -72,38 +68,42 @@ class GitHubIssueService:
         self._settings_repo = settings_repo
 
     # ------------------------------------------------------------------
-    # Public API
+    # AbstractReportService — typed convenience methods
     # ------------------------------------------------------------------
 
-    def submit_bug(self, report: BugReport) -> IssueResult:
+    def submit_bug(self, report: BugReport) -> SubmitResult:
         """Submit a bug report as a GitHub issue."""
         title = report.title
         body = self._build_bug_body(report)
         return self.create_issue(IssueType.BUG, title, body)
 
-    def submit_feature(self, request: FeatureRequest) -> IssueResult:
+    def submit_feature(self, request: FeatureRequest) -> SubmitResult:
         """Submit a feature request as a GitHub issue."""
         title = request.title
         body = self._build_feature_body(request)
         return self.create_issue(IssueType.FEATURE, title, body)
 
-    def submit_feedback(self, feedback: FeedbackReport) -> IssueResult:
+    def submit_feedback(self, feedback: FeedbackReport) -> SubmitResult:
         """Submit feedback as a GitHub issue."""
         title = feedback.subject
         body = self._build_feedback_body(feedback)
         return self.create_issue(IssueType.FEEDBACK, title, body)
 
-    def create_issue(
-        self, issue_type: IssueType, title: str, body: str
-    ) -> IssueResult:
-        """Create a GitHub issue via the REST API.
+    # ------------------------------------------------------------------
+    # AbstractReportService — generic submit
+    # ------------------------------------------------------------------
+
+    def submit_report(
+        self, report_type: ReportType, title: str, body: str
+    ) -> SubmitResult:
+        """Submit a report as a GitHub issue.
 
         Returns:
-            IssueResult with success status, url, and optional error.
+            SubmitResult with success status, url, and optional error.
         """
         config = self._load_config()
         if config is None:
-            return IssueResult(
+            return SubmitResult(
                 success=False,
                 error_message=(
                     "GitHub not configured. Set github_token, "
@@ -114,14 +114,14 @@ class GitHubIssueService:
         payload = {
             "title": title,
             "body": body,
-            "labels": [issue_type.value],
+            "labels": [report_type.value],
         }
 
         try:
             return self._post_issue(config, payload)
         except URLError as exc:
             logger.error("Network error posting GitHub issue: %s", exc)
-            return IssueResult(
+            return SubmitResult(
                 success=False,
                 error_message=(
                     "Network error: could not reach GitHub. "
@@ -130,10 +130,20 @@ class GitHubIssueService:
             )
         except Exception as exc:
             logger.exception("Unexpected error posting GitHub issue: %s", exc)
-            return IssueResult(
+            return SubmitResult(
                 success=False,
                 error_message="An unexpected error occurred while submitting.",
             )
+
+    # ------------------------------------------------------------------
+    # Backward-compat alias
+    # ------------------------------------------------------------------
+
+    def create_issue(
+        self, issue_type: IssueType, title: str, body: str
+    ) -> SubmitResult:
+        """Deprecated — use *submit_report* instead."""
+        return self.submit_report(issue_type, title, body)
 
     # ------------------------------------------------------------------
     # Config
