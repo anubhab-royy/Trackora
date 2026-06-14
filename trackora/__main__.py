@@ -25,6 +25,10 @@ from services.game_service import GameService
 from services.logging_service import LoggingService
 from services.session_history_service import SessionHistoryService
 from services.startup_service import StartupService
+from services.support.report_queue_service import ReportQueueService
+from services.support.supabase_report_service import SupabaseReportService
+from services.support.support_service import SupportService
+from services.update_announcements_service import UpdateAnnouncementsService
 from trackora.core.paths import DATABASE_PATH, ensure_dirs
 from trackora.core.single_instance import acquire as _acquire_lock
 from trackora.core.single_instance import release as _release_lock
@@ -78,6 +82,31 @@ def main() -> None:
     PlaytimeCalculator(sessions_repo, games_repo)
     export_service = ExportService(sessions_repo, games_repo, settings_repo)
 
+    # ------------------------------------------------------------------
+    # Reporting backend (Supabase, fallback to offline queue)
+    # ------------------------------------------------------------------
+    report_service = SupabaseReportService()
+    if report_service.is_configured:
+        logger.info("Supabase reporting: configured")
+    else:
+        logger.warning(
+            "Supabase reporting: not configured — "
+            "reports will be queued offline until a backend is available. "
+            "Set SUPABASE_URL and SUPABASE_ANON_KEY to enable."
+        )
+    queue_service = ReportQueueService()
+    announcements_service = UpdateAnnouncementsService(
+        remote_url=(
+            "https://raw.githubusercontent.com/"
+            "anomalco/trackora-announcements/main/announcements.json"
+        ),
+    )
+    support_service = SupportService(
+        github_service=report_service,
+        queue_service=queue_service,
+        announcements_service=announcements_service,
+    )
+
     tracking_state = TrackingState()
     session_manager = SessionManager(
         state=tracking_state,
@@ -112,6 +141,8 @@ def main() -> None:
         active_sessions_repo=active_sessions_repo,
         games_repo=games_repo,
         tracking_state=tracking_state,
+        support_service=support_service,
+        report_service=report_service,
     )
 
     def reload_tracked_games() -> None:

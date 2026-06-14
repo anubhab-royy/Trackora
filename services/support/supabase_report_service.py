@@ -116,6 +116,11 @@ class SupabaseReportService(AbstractReportService):
     ) -> None:
         self._config = self._resolve_config(supabase_url, anon_key)
 
+    @property
+    def is_configured(self) -> bool:
+        """Whether this service has valid Supabase credentials."""
+        return self._config.is_valid
+
     # ------------------------------------------------------------------
     # AbstractReportService — typed convenience methods
     # ------------------------------------------------------------------

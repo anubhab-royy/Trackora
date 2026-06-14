@@ -94,6 +94,7 @@ class MainWindow(QMainWindow):
         games_repo: GamesRepository,
         support_service: SupportService | None = None,
         tracking_state: TrackingState | None = None,
+        report_service: AbstractReportService | None = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -107,19 +108,17 @@ class MainWindow(QMainWindow):
         self._games_repo = games_repo
         self._tracking_state = tracking_state
 
-        # Crash detection — check PREVIOUS session's state before
-        # overwriting with this session's "running" marker.
-        # github_service currently uses GitHubIssueService; swap
-        # with any AbstractReportService backend (e.g. Supabase).
         self._diagnostic_service = DiagnosticService()
         self._crash_service = CrashService(self._diagnostic_service)
-        self._github_service: AbstractReportService = GitHubIssueService(self._settings_repo)
+        self._report_service: AbstractReportService = (
+            report_service or GitHubIssueService(self._settings_repo)
+        )
         self._queue_service = ReportQueueService()
         self._announcements_service = UpdateAnnouncementsService(
             remote_url=self._get_announcements_url(),
         )
         self._support_service = support_service or SupportService(
-            github_service=self._github_service,
+            github_service=self._report_service,
             queue_service=self._queue_service,
             announcements_service=self._announcements_service,
         )
@@ -409,7 +408,7 @@ class MainWindow(QMainWindow):
             dialog = CrashDialog(
                 report=result.report,
                 report_path=result.report_path,
-                github_service=self._github_service,
+                github_service=self._report_service,
                 parent=self,
             )
             dialog.exec()

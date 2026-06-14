@@ -492,3 +492,156 @@ class TestContractCompliance:
         )
         from services.support.reporting_interface import AbstractReportService
         assert isinstance(svc, AbstractReportService)
+
+
+# ---------------------------------------------------------------------------
+# Integration: SupportService + SupabaseReportService
+# ---------------------------------------------------------------------------
+
+
+class TestSupportServiceIntegration:
+    """SupabaseReportService wired through SupportService (DI chain)."""
+
+    def test_submit_bug_via_support_service(self):
+        """Bug submitted through SupportService reaches Supabase backend."""
+        from services.support.support_service import SupportService
+
+        supabase = SupabaseReportService(
+            supabase_url="https://test.supabase.co",
+            anon_key="test-key",
+        )
+        svc = SupportService(github_service=supabase)
+
+        report = BugReport(
+            title="Integration Bug",
+            description="Bug description",
+            steps_to_reproduce="1. Step one",
+            expected_behavior="Should work",
+            actual_behavior="Does not work",
+        )
+
+        with patch(
+            "services.support.supabase_report_service.urlopen"
+        ) as mock_urlopen:
+            mock_resp = MagicMock()
+            mock_resp.getcode.return_value = 201
+            mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+            result = svc.submit_bug_report(report)
+
+        assert result.github_success is True
+        assert result.local_stored is True
+
+        call_body = json.loads(mock_urlopen.call_args[0][0].data)
+        assert call_body["type"] == "bug"
+        assert call_body["title"] == "Integration Bug"
+        assert call_body["source"] == "support_center"
+
+    def test_submit_feature_via_support_service(self):
+        """Feature request through SupportService reaches Supabase."""
+        from services.support.support_service import SupportService
+
+        supabase = SupabaseReportService(
+            supabase_url="https://test.supabase.co",
+            anon_key="test-key",
+        )
+        svc = SupportService(github_service=supabase)
+
+        request = FeatureRequest(
+            title="Integration Feature",
+            description="Feature desc",
+            use_case="To improve workflow",
+        )
+
+        with patch(
+            "services.support.supabase_report_service.urlopen"
+        ) as mock_urlopen:
+            mock_resp = MagicMock()
+            mock_resp.getcode.return_value = 201
+            mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+            result = svc.submit_feature_request(request)
+
+        assert result.github_success is True
+        call_body = json.loads(mock_urlopen.call_args[0][0].data)
+        assert call_body["type"] == "feature-request"
+        assert call_body["title"] == "Integration Feature"
+
+    def test_submit_feedback_via_support_service(self):
+        """Feedback through SupportService reaches Supabase."""
+        from services.support.support_service import SupportService
+
+        supabase = SupabaseReportService(
+            supabase_url="https://test.supabase.co",
+            anon_key="test-key",
+        )
+        svc = SupportService(github_service=supabase)
+
+        feedback = FeedbackReport(
+            subject="Integration Feedback",
+            message="Great app!",
+            category="praise",
+        )
+
+        with patch(
+            "services.support.supabase_report_service.urlopen"
+        ) as mock_urlopen:
+            mock_resp = MagicMock()
+            mock_resp.getcode.return_value = 201
+            mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+            result = svc.submit_feedback(feedback)
+
+        assert result.github_success is True
+        call_body = json.loads(mock_urlopen.call_args[0][0].data)
+        assert call_body["type"] == "feedback"
+
+    def test_unconfigured_does_not_crash_support_service(self):
+        """Missing Supabase config does not break SupportService creation."""
+        from services.support.support_service import SupportService
+
+        supabase = SupabaseReportService(
+            supabase_url="",
+            anon_key="",
+        )
+        assert supabase.is_configured is False
+
+        svc = SupportService(github_service=supabase)
+        assert svc is not None
+
+        report = BugReport(
+            title="Offline Bug",
+            description="desc",
+            steps_to_reproduce="s",
+            expected_behavior="e",
+            actual_behavior="a",
+        )
+        result = svc.submit_bug_report(report)
+        assert result.github_success is False
+        assert result.local_stored is True
+
+
+# ---------------------------------------------------------------------------
+# is_configured property
+# ---------------------------------------------------------------------------
+
+
+class TestIsConfigured:
+    def test_configured_returns_true(self):
+        svc = SupabaseReportService(
+            supabase_url="https://test.supabase.co",
+            anon_key="key",
+        )
+        assert svc.is_configured is True
+
+    def test_unconfigured_returns_false(self):
+        svc = SupabaseReportService(supabase_url="", anon_key="")
+        assert svc.is_configured is False
+
+    def test_reads_from_env(self):
+        with patch.dict(os.environ, {
+            "SUPABASE_URL": "https://env-test.supabase.co",
+            "SUPABASE_ANON_KEY": "env-key",
+        }, clear=True):
+            svc = SupabaseReportService()
+            assert svc.is_configured is True
