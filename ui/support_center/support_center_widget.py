@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -259,7 +259,7 @@ class SupportCenterWidget(QWidget):
             btn = QPushButton(label)
             btn.setObjectName("SecondaryButton")
             btn.setFixedHeight(36)
-            btn.setCursor(btn.cursor().shape)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.clicked.connect(lambda checked, k=page_key: self._on_nav_clicked(k))
             bar_layout.addWidget(btn)
             self._nav_buttons[page_key] = btn
