@@ -216,9 +216,16 @@ class SupabaseReportService(AbstractReportService):
             "payload": payload,
         }
 
+        api_url = self._config.api_url
+        logger.debug(
+            "Supabase request URL: config.url=%s  config.api_url=%s",
+            self._config.url,
+            api_url,
+        )
+
         data = json.dumps(row).encode("utf-8")
         req = Request(
-            self._config.api_url,
+            api_url,
             data=data,
             headers={
                 "apikey": self._config.anon_key,
@@ -227,6 +234,8 @@ class SupabaseReportService(AbstractReportService):
                 "Prefer": "return=minimal",
             },
         )
+
+        logger.debug("Supabase request.full_url=%s", req.full_url)
 
         try:
             with urlopen(req, timeout=_API_TIMEOUT_SECONDS) as resp:

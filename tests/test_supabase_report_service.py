@@ -66,6 +66,41 @@ class TestSupabaseConfig:
         cfg = SupabaseConfig(url="x.supabase.co", anon_key="key")
         assert cfg.api_url == "https://x.supabase.co/rest/v1/reports"
 
+    # ------------------------------------------------------------------
+    # Regression: no spurious ``db.`` subdomain injected
+    # ------------------------------------------------------------------
+
+    def test_real_supabase_url_no_db_prefix(self):
+        """The actual Supabase URL must never gain a ``db.`` prefix."""
+        cfg = SupabaseConfig(
+            url="https://uphwhrcmmdnekgoojzza.supabase.co",
+            anon_key="test-key",
+        )
+        result = cfg.api_url
+        assert result.startswith("https://uphwhrcmmdnekgoojzza.supabase.co/")
+        assert "db." not in result
+
+    def test_plain_no_prefix_preserved(self):
+        """A URL without ``db.`` must not gain one after api_url processing."""
+        for url in [
+            "x.supabase.co",
+            "https://x.supabase.co",
+            "x.supabase.co/",
+        ]:
+            cfg = SupabaseConfig(url=url, anon_key="key")
+            result = cfg.api_url
+            assert "db." not in result, f"db. appeared in api_url for input {url!r}"
+
+    def test_db_prefix_in_input_is_preserved_not_added(self):
+        """If the user explicitly provides `db.`, keep it — never strip it."""
+        cfg = SupabaseConfig(
+            url="db.uphwhrcmmdnekgoojzza.supabase.co",
+            anon_key="key",
+        )
+        result = cfg.api_url
+        assert "db.uphwhrcmmdnekgoojzza.supabase.co" in result
+        assert result == "https://db.uphwhrcmmdnekgoojzza.supabase.co/rest/v1/reports"
+
 
 # ---------------------------------------------------------------------------
 # Config resolution

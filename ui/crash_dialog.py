@@ -134,7 +134,7 @@ class CrashDialog(QDialog):
     def _on_send(self) -> None:
         if self._github_service is None:
             self._status_label.setText(
-                "GitHub is not configured. "
+                "Unable to submit report right now. "
                 "Use Review Report to view the details manually."
             )
             return
