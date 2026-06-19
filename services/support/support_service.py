@@ -1,7 +1,7 @@
 """
 SupportService — orchestrates support operations.
 
-Stores submissions locally, submits to GitHub via GitHubIssueService,
+Stores submissions locally, submits via an AbstractReportService backend,
 and queues failed submissions for retry via ReportQueueService.
 """
 
@@ -14,6 +14,7 @@ from uuid import uuid4
 from models.support.bug_report import BugReport
 from models.support.feature_request import FeatureRequest
 from models.support.feedback_report import FeedbackReport
+from services.support.reporting_interface import AbstractReportService
 from services.update_announcements_service import (
     AnnouncementsResult,
     FeatureAnnouncement,
@@ -37,9 +38,9 @@ class SupportSubmitResult:
 
     Attributes:
         local_stored:   True when the report was persisted in memory.
-        github_success: True when the report was also submitted to GitHub.
-        github_url:     URL of the created GitHub issue (if applicable).
-        github_error:   Error message if GitHub submission failed.
+        github_success: True when the report was also submitted to backend.
+        github_url:     URL of the created item (if applicable).
+        github_error:   Error message if backend submission failed.
         queued:         True when the report was queued for offline retry.
         queued_path:    Path to the queued JSON file (if applicable).
     """
@@ -66,7 +67,7 @@ _NON_RETRYABLE_KEYWORDS = [
 
 
 def _is_retryable(error_message: str | None) -> bool:
-    """Return True if the GitHub error is transient and worth retrying."""
+    """Return True if the backend error is transient and worth retrying."""
     if error_message is None:
         return False
     lower = error_message.lower()
@@ -77,7 +78,8 @@ class SupportService:
     """Service interface for support center operations.
 
     Stores submissions in memory, optionally forwards them
-    to GitHub Issues, and queues failed submissions for retry.
+    to a report backend, and queues failed submissions
+    for offline retry.
 
     Architecture rules:
     - No UI imports.
@@ -87,7 +89,7 @@ class SupportService:
 
     def __init__(
         self,
-        github_service: object | None = None,
+        github_service: AbstractReportService | None = None,
         queue_service: object | None = None,
         announcements_service: UpdateAnnouncementsService | None = None,
     ) -> None:
@@ -148,7 +150,7 @@ class SupportService:
         return self._queue_service.process_queue(self._queue_submit_fn())
 
     # ------------------------------------------------------------------
-    # Internal: GitHub + queue orchestration
+    # Internal: backend + queue orchestration
     # ------------------------------------------------------------------
 
     def _submit_with_github_and_queue(
@@ -181,7 +183,7 @@ class SupportService:
     def _try_github_submit(
         self, method: str, model: object
     ) -> tuple[bool, str | None, str | None]:
-        """Attempt to forward a submission to GitHub.
+        """Attempt to forward a submission to the backend.
 
         Returns (success, url, error_message).
         """
@@ -194,12 +196,12 @@ class SupportService:
                 return False, None, None
             result = method_fn(model)
             if result.success:
-                logger.info("GitHub issue created: %s", result.issue_url)
+                logger.info("Report submitted to backend: %s", result.issue_url or "ok")
                 return True, result.issue_url, None
-            logger.warning("GitHub submission failed: %s", result.error_message)
+            logger.warning("Backend submission failed: %s", result.error_message)
             return False, None, result.error_message
         except Exception as exc:
-            logger.exception("GitHub submission error: %s", exc)
+            logger.exception("Backend submission error: %s", exc)
             return False, None, str(exc)
 
     def _try_queue_report(
@@ -341,9 +343,9 @@ class SupportService:
                     is_published=False,
                 ),
                 FeatureAnnouncement(
-                    title="GitHub Integration",
+                    title="Direct Report Submission",
                     description="Submit bug reports and feature requests "
-                                "directly to GitHub Issues.",
+                                "directly from the Support Center.",
                     version="1.2.0",
                     is_published=True,
                 ),

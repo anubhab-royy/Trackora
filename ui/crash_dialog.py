@@ -2,7 +2,7 @@
 CrashDialog — user-facing notification after an unexpected shutdown.
 
 Presents three options:
-  - Send Report    (submit as GitHub issue)
+  - Send Report    (submit via AbstractReportService backend)
   - Review Report  (show the JSON content in a text view)
   - Dismiss        (delete the crash report file)
 """
@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
 )
 
 from services.crash.diagnostic_service import CrashReport, DiagnosticService
-from services.support.github_issue_service import GitHubIssueService, IssueType
+from services.support.reporting_interface import AbstractReportService, ReportType
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class CrashDialog(QDialog):
         self,
         report: CrashReport,
         report_path: Path,
-        github_service: GitHubIssueService | None = None,
+        github_service: AbstractReportService | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -134,7 +134,7 @@ class CrashDialog(QDialog):
     def _on_send(self) -> None:
         if self._github_service is None:
             self._status_label.setText(
-                "GitHub is not configured. "
+                "Unable to submit report right now. "
                 "Use Review Report to view the details manually."
             )
             return
@@ -146,8 +146,8 @@ class CrashDialog(QDialog):
         body = self._build_issue_body(self._report)
 
         try:
-            result = self._github_service.create_issue(
-                IssueType.CRASH, title, body
+            result = self._github_service.submit_report(
+                ReportType.CRASH, title, body
             )
             if result.success:
                 self._issue_url = result.issue_url

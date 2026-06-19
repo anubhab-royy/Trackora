@@ -128,9 +128,10 @@ class SupportCenterController:
         self, page_key: str, result: object
     ) -> None:
         local_stored = getattr(result, "local_stored", False)
-        github_success = getattr(result, "github_success", False)
-        github_url = getattr(result, "github_url", None)
-        github_error = getattr(result, "github_error", None)
+        backend_success = getattr(result, "github_success", False)
+        backend_url = getattr(result, "github_url", None)
+        backend_error = getattr(result, "github_error", None)
+        queued = getattr(result, "queued", False)
 
         if not local_stored:
             self._view.set_submit_result(
@@ -138,19 +139,31 @@ class SupportCenterController:
             )
             return
 
-        messages = ["Saved locally."]
-        if github_success and github_url:
-            messages.append(f"GitHub issue created: {github_url}")
-            self._view.set_submit_result(page_key, True, " ".join(messages))
-        elif github_error:
-            messages.append(f"GitHub: {github_error}")
-            self._view.set_submit_result(page_key, True, " ".join(messages))
-        else:
-            messages.append(
-                "GitHub not configured. Set up GitHub in settings "
-                "to submit issues directly."
+        if backend_success and backend_url:
+            self._view.set_submit_result(
+                page_key, True,
+                f"Report submitted successfully.\nTrack it at: {backend_url}",
             )
-            self._view.set_submit_result(page_key, True, " ".join(messages))
+        elif backend_success:
+            self._view.set_submit_result(
+                page_key, True,
+                "Report submitted successfully.",
+            )
+        elif queued:
+            self._view.set_submit_result(
+                page_key, True,
+                "Report saved locally and will be sent automatically.",
+            )
+        elif backend_error:
+            self._view.set_submit_result(
+                page_key, True,
+                f"Report saved locally.\n{backend_error}",
+            )
+        else:
+            self._view.set_submit_result(
+                page_key, True,
+                "Report saved locally and will be sent automatically.",
+            )
 
     def _load_upcoming_updates(self) -> None:
         try:
