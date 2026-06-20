@@ -1,0 +1,18 @@
+{
+	"InstallationList": [
+		{
+			"AppName": "Fortnite",
+			"DisplayName": "Fortnite",
+			"InstallLocation": "C:\\Program Files\\Epic Games\\Fortnite",
+			"LaunchExecutable": "FortniteClient-Win64-Shipping.exe",
+			"AppVersion": "26.00"
+		},
+		{
+			"AppName": "Jerry",
+			"DisplayName": "Rocket League",
+			"InstallLocation": "D:\\Epic Games\\rocketleague",
+			"LaunchExecutable": "RocketLeague.exe",
+			"AppVersion": "1.97"
+		}
+	]
+}

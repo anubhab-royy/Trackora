@@ -1,0 +1,12 @@
+{
+	"associated_client": {
+		"rc_live_league_of_legends": {
+			"rc_install_path": "C:\\Riot Games\\League of Legends",
+			"rc_launched_locally": true
+		},
+		"rc_live_valorant": {
+			"rc_install_path": "C:\\Riot Games\\VALORANT",
+			"rc_launched_locally": true
+		}
+	}
+}

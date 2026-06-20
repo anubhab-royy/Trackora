@@ -192,8 +192,17 @@ class MainWindow(QMainWindow):
         self._dash_view = DashboardWidget(self._dash_ctrl, self)
         self._content.addWidget(self._dash_view)
 
+        # Discovery orchestrator for "Scan For Games"
+        from tracker.discovery.orchestrator import DiscoveryOrchestrator
+        discovery_orchestrator = DiscoveryOrchestrator(
+            exists_by_executable_path=self._games_repo.get_by_executable_path,
+            exists_by_platform_id=self._games_repo.exists_by_platform_id,
+        )
+
         self._games_view = GamesView(self)
-        self._games_ctrl = GamesController(self._games_view, self._game_service)
+        self._games_ctrl = GamesController(
+            self._games_view, self._game_service, discovery_orchestrator
+        )
         self._content.addWidget(self._games_view)
 
         self._hist_view = HistoryView(self)

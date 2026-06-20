@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 
 def _row_to_game(row: sqlite3.Row) -> Game:
     """Convert a sqlite3.Row from the games table into a Game dataclass."""
+    platform = row["platform"] if row["platform"] is not None else ""
+    platform_id = row["platform_id"] if row["platform_id"] is not None else ""
+    is_auto_discovered = bool(row["is_auto_discovered"]) if row["is_auto_discovered"] is not None else False
     return Game(
         id=row["id"],
         name=row["name"],
@@ -32,6 +35,9 @@ def _row_to_game(row: sqlite3.Row) -> Game:
         executable_path=row["executable_path"],
         icon_path=row["icon_path"] or "",
         is_enabled=bool(row["is_enabled"]),
+        platform=platform,
+        platform_id=platform_id,
+        is_auto_discovered=is_auto_discovered,
         first_played=_parse_dt(row["first_played"]),
         last_played=_parse_dt(row["last_played"]),
         created_at=_parse_dt(row["created_at"]) or datetime.now(UTC).replace(tzinfo=None),
@@ -88,8 +94,9 @@ class GamesRepository:
             """
             INSERT INTO games
                 (name, process_name, executable_path, icon_path,
-                 is_enabled, first_played, last_played, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 is_enabled, platform, platform_id, is_auto_discovered,
+                 first_played, last_played, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 game.name,
@@ -97,6 +104,9 @@ class GamesRepository:
                 game.executable_path,
                 game.icon_path,
                 1 if game.is_enabled else 0,
+                game.platform if game.platform else None,
+                game.platform_id if game.platform_id else None,
+                1 if game.is_auto_discovered else 0,
                 _dt_str(game.first_played),
                 _dt_str(game.last_played),
                 _dt_str(game.created_at),
@@ -171,6 +181,25 @@ class GamesRepository:
         row = cursor.fetchone()
         return _row_to_game(row) if row else None
 
+    def get_by_platform_id(self, platform: str, platform_id: str) -> Game | None:
+        """Return the Game with the given platform + platform_id, or None."""
+        cursor = self._conn.cursor()
+        cursor.execute(
+            "SELECT * FROM games WHERE platform = ? AND platform_id = ? LIMIT 1;",
+            (platform, platform_id),
+        )
+        row = cursor.fetchone()
+        return _row_to_game(row) if row else None
+
+    def exists_by_platform_id(self, platform: str, platform_id: str) -> bool:
+        """Check whether a game with this platform + platform_id exists."""
+        cursor = self._conn.cursor()
+        cursor.execute(
+            "SELECT 1 FROM games WHERE platform = ? AND platform_id = ? LIMIT 1;",
+            (platform, platform_id),
+        )
+        return cursor.fetchone() is not None
+
     # ------------------------------------------------------------------
     # Update
     # ------------------------------------------------------------------
@@ -195,6 +224,9 @@ class GamesRepository:
                 executable_path  = ?,
                 icon_path        = ?,
                 is_enabled       = ?,
+                platform         = ?,
+                platform_id      = ?,
+                is_auto_discovered = ?,
                 first_played     = ?,
                 last_played      = ?,
                 updated_at       = ?
@@ -206,6 +238,9 @@ class GamesRepository:
                 game.executable_path,
                 game.icon_path,
                 1 if game.is_enabled else 0,
+                game.platform if game.platform else None,
+                game.platform_id if game.platform_id else None,
+                1 if game.is_auto_discovered else 0,
                 _dt_str(game.first_played),
                 _dt_str(game.last_played),
                 _dt_str(game.updated_at),

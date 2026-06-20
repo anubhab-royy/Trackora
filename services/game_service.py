@@ -22,6 +22,9 @@ class AddGameRequest:
     """Data transfer object for adding a game."""
     name: str
     executable_path: str
+    platform: str = ""
+    platform_id: str = ""
+    is_auto_discovered: bool = False
 
 
 @dataclass
@@ -121,6 +124,9 @@ class GameService:
                 name=name,
                 process_name=process_name,
                 executable_path=executable_path,
+                platform=request.platform,
+                platform_id=request.platform_id,
+                is_auto_discovered=request.is_auto_discovered,
             )
             game = self._repo.add(game)
             logger.info("Added game: %s (process: %s)", name, process_name)
@@ -218,6 +224,63 @@ class GameService:
             logger.error("Failed to set enabled state for game %d: %s", game_id, exc)
             return GameServiceResult(
                 success=False, message="Failed to update tracking state."
+            )
+
+    def import_discovered_games(self, candidates: list) -> GameServiceResult:
+        """
+        Bulk-import discovered game candidates.
+
+        For each candidate:
+        1. Check duplicate by executable_path — skip if exists
+        2. Build AddGameRequest with platform fields
+        3. Call add_game() for each
+        4. Return count of successfully imported games
+        """
+        if not candidates:
+            return GameServiceResult(success=False, message="No games to import.")
+
+        imported = 0
+        skipped = 0
+
+        for candidate in candidates:
+            # Skip duplicates by executable_path
+            existing = self._repo.get_by_executable_path(candidate.executable_path)
+            if existing is not None:
+                skipped += 1
+                continue
+
+            # Skip duplicates by (platform, platform_id)
+            if candidate.platform and candidate.platform_id:
+                existing_platform = self._repo.get_by_platform_id(
+                    candidate.platform, candidate.platform_id
+                )
+                if existing_platform is not None:
+                    skipped += 1
+                    continue
+
+            request = AddGameRequest(
+                name=candidate.name,
+                executable_path=candidate.executable_path,
+                platform=candidate.platform,
+                platform_id=candidate.platform_id,
+                is_auto_discovered=getattr(candidate, "is_auto_discovered", True),
+            )
+
+            result = self.add_game(request)
+            if result.success:
+                imported += 1
+            else:
+                skipped += 1
+
+        if imported > 0:
+            msg = f"{imported} game(s) imported successfully."
+            if skipped > 0:
+                msg += f" {skipped} skipped (already exist)."
+            return GameServiceResult(success=True, message=msg)
+        else:
+            return GameServiceResult(
+                success=False,
+                message="No games were imported. All candidates already exist.",
             )
 
     # ------------------------------------------------------------------
