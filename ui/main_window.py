@@ -467,6 +467,7 @@ class MainWindow(QMainWindow):
                 report=result.report,
                 report_path=result.report_path,
                 github_service=self._report_service,
+                queue_service=self._queue_service,
                 parent=self,
             )
             dialog.exec()

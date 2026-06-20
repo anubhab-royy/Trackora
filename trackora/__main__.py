@@ -30,7 +30,8 @@ from services.logging_service import LoggingService
 from services.session_history_service import SessionHistoryService
 from services.startup_service import StartupService
 from services.support.report_queue_service import ReportQueueService
-from services.support.supabase_report_service import SupabaseReportService
+from services.support.mongo_connection import MongoConnection
+from services.support.mongo_report_service import MongoReportService
 from services.support.support_service import SupportService
 from services.update_announcements_service import UpdateAnnouncementsService
 from trackora.core.backup_manager import BackupManager
@@ -196,17 +197,17 @@ def main() -> None:
     export_service = ExportService(sessions_repo, games_repo, settings_repo)
 
     # ------------------------------------------------------------------
-    # Reporting backend (Supabase, fallback to offline queue)
+    # Reporting backend (MongoDB, fallback to offline queue)
     # ------------------------------------------------------------------
-    report_service = SupabaseReportService()
-    if report_service.is_configured:
-        logger.info("Supabase reporting: configured")
+    mongo = MongoConnection()
+    if mongo.is_available:
+        logger.info("MongoDB reporting: connected")
     else:
         logger.warning(
-            "Supabase reporting: not configured — "
-            "reports will be queued offline until a backend is available. "
-            "Set SUPABASE_URL and SUPABASE_ANON_KEY to enable."
+            "MongoDB reporting: not available — "
+            "reports will be queued offline."
         )
+    report_service = MongoReportService(connection=mongo)
     queue_service = ReportQueueService()
     announcements_service = UpdateAnnouncementsService(
         remote_url=(

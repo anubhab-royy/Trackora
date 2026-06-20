@@ -186,3 +186,11 @@ class TestCrashDialogDI:
         assert param is not None
         # Verify the default is None (backward compatible)
         assert param.default is None
+
+    def test_accepts_queue_service_type_hint(self):
+        """CrashDialog constructor type-hints queue_service as ReportQueueService."""
+        import inspect
+        sig = inspect.signature(CrashDialog.__init__)
+        param = sig.parameters.get("queue_service")
+        assert param is not None
+        assert param.default is None

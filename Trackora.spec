@@ -25,6 +25,8 @@ a = Analysis(
         "PyQt6.QtSvg",
         "pyqtgraph",
         "psutil",
+        "pymongo",
+        "dns",
         "database",
         "database.models",
         "database.repositories",
