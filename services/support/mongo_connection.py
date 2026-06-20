@@ -27,8 +27,13 @@ class MongoConnection:
             db["bug_reports"].insert_one({"title": "..."})
     """
 
-    def __init__(self, uri: str | None = None) -> None:
+    def __init__(
+        self,
+        uri: str | None = None,
+        database_name: str | None = None,
+    ) -> None:
         self._uri = uri or os.environ.get("MONGODB_URI", "")
+        self._database_name = database_name or os.environ.get("MONGODB_DATABASE", "")
         self._client: MongoClient | None = None
         self._lock = threading.Lock()
         self._available: bool | None = None
@@ -51,11 +56,24 @@ class MongoConnection:
 
         The underlying ``MongoClient`` is created **lazily** on the first
         call to this property and is reused for the lifetime of this object.
+
+        The database name is resolved in the following order:
+          1. URI path component (via ``get_default_database()``).
+          2. Explicit ``database_name`` constructor argument.
+          3. ``MONGODB_DATABASE`` environment variable.
         """
         if not self._uri:
             return None
         client = self._get_or_create_client()
-        return client.get_default_database()
+        try:
+            db = client.get_default_database()
+            if db is not None:
+                return db
+        except Exception:
+            pass
+        if self._database_name:
+            return client[self._database_name]
+        return None
 
     # ------------------------------------------------------------------
     # Health check

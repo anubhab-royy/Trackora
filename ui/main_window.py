@@ -185,11 +185,24 @@ class MainWindow(QMainWindow):
 
         sidebar_layout.addWidget(self._nav, stretch=1)
 
+        content_frame = QWidget()
+        content_layout = QVBoxLayout(content_frame)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+
+        self._update_banner = UpdateBanner(content_frame)
+        self._update_banner.hide()
+        self._update_banner.ignored.connect(self._on_update_banner_ignored)
+        self._update_banner.view_notes_requested.connect(self._on_show_release_notes)
+
+        content_layout.addWidget(self._update_banner)
+
         self._content = QStackedWidget()
         self._content.setObjectName("ContentArea")
+        content_layout.addWidget(self._content, stretch=1)
 
         root.addWidget(sidebar)
-        root.addWidget(self._content, stretch=1)
+        root.addWidget(content_frame, stretch=1)
 
     def _build_views(self) -> None:
         self._dash_ctrl = DashboardController(
@@ -227,12 +240,6 @@ class MainWindow(QMainWindow):
             settings_repo=self._settings_repo,
             repo="anomalyco/trackora",
         )
-
-        self._update_banner = UpdateBanner(self._content)
-        self._update_banner.ignored.connect(self._on_update_banner_ignored)
-        self._update_banner.view_notes_requested.connect(self._on_show_release_notes)
-        self._update_banner.hide()
-        self._content.layout().insertWidget(0, self._update_banner)
 
         self._settings_view = SettingsView(self)
         self._settings_ctrl = SettingsController(

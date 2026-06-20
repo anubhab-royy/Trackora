@@ -179,3 +179,65 @@ class TestThreadSafety:
             assert len(errors) == 0
             assert len(results) == 3
             assert all(r is results[0] for r in results)
+
+
+class TestDatabaseFallback:
+    def test_database_from_uri_path(self):
+        with patch("services.support.mongo_connection.MongoClient") as mock_cls:
+            mock_client = MagicMock()
+            mock_db = MagicMock()
+            mock_client.get_default_database.return_value = mock_db
+            mock_cls.return_value = mock_client
+
+            conn = MongoConnection(uri="mongodb://localhost/dbfromuri")
+            assert conn.database is mock_db
+            mock_client.get_default_database.assert_called_once()
+
+    def test_database_fallback_to_database_name(self):
+        mock_client = MagicMock()
+        mock_db_from_uri = None  # simulate URI with no db name
+        mock_db_fallback = MagicMock()
+
+        with patch(
+            "services.support.mongo_connection.MongoClient",
+            return_value=mock_client,
+        ):
+            mock_client.get_default_database.return_value = mock_db_from_uri
+            mock_client.__getitem__.return_value = mock_db_fallback
+
+            conn = MongoConnection(
+                uri="mongodb://localhost:27017",
+                database_name="from_constructor",
+            )
+            assert conn.database is mock_db_fallback
+            mock_client.__getitem__.assert_called_with("from_constructor")
+
+    def test_database_fallback_to_env(self):
+        with patch.dict(os.environ, {"MONGODB_DATABASE": "from_env"}, clear=True):
+            mock_client = MagicMock()
+            mock_db_from_uri = None
+            mock_db_fallback = MagicMock()
+
+            with patch(
+                "services.support.mongo_connection.MongoClient",
+                return_value=mock_client,
+            ):
+                mock_client.get_default_database.return_value = mock_db_from_uri
+                mock_client.__getitem__.return_value = mock_db_fallback
+
+                conn = MongoConnection(uri="mongodb://localhost:27017")
+                assert conn.database is mock_db_fallback
+                mock_client.__getitem__.assert_called_with("from_env")
+
+    def test_no_database_none_when_missing(self):
+        with patch.dict(os.environ, {}, clear=True):
+            conn = MongoConnection(uri="mongodb://localhost:27017")
+            assert conn.database is None
+
+    def test_explicit_empty_database_name(self):
+        with patch.dict(os.environ, {}, clear=True):
+            conn = MongoConnection(
+                uri="mongodb://localhost:27017",
+                database_name="",
+            )
+            assert conn.database is None

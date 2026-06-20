@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import atexit
 import logging
+import os
 import sys
 
 from PyQt6.QtCore import QTimer
@@ -36,6 +37,7 @@ from services.support.support_service import SupportService
 from services.update_announcements_service import UpdateAnnouncementsService
 from trackora.core.backup_manager import BackupManager
 from trackora.core.environment import CURRENT_ENVIRONMENT
+from trackora.core.env import load_env_file
 from trackora.core.migration_manager import MigrationManager
 from trackora.core.paths import DATABASE_PATH, ensure_dirs
 from trackora.core.schema_version import SchemaVersion
@@ -58,6 +60,8 @@ from ui.themes.theme_manager import ThemeManager
 def main() -> None:
     LoggingService.setup()
     logger = logging.getLogger(__name__)
+
+    load_env_file()
 
     app_version = SchemaVersion.current_app_version()
     logger.info(
@@ -199,8 +203,10 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Reporting backend (MongoDB, fallback to offline queue)
     # ------------------------------------------------------------------
-    mongo = MongoConnection()
-    if mongo.is_available:
+    mongo = MongoConnection(
+        database_name=os.environ.get("MONGODB_DATABASE"),
+    )
+    if mongo.health_check():
         logger.info("MongoDB reporting: connected")
     else:
         logger.warning(
