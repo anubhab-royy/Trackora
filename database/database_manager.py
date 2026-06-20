@@ -214,6 +214,20 @@ class DatabaseManager:
             """)
 
             # ------------------------------------------------------------------ #
+            # Table: _migrations  (upgrade foundation — upgrade-foundation-spec)   #
+            # ------------------------------------------------------------------ #
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS _migrations (
+                    migration_id TEXT PRIMARY KEY,
+                    description  TEXT NOT NULL,
+                    app_version  TEXT NOT NULL,
+                    checksum     TEXT NOT NULL,
+                    applied_at   TEXT NOT NULL,
+                    duration_ms  INTEGER NOT NULL DEFAULT 0
+                );
+            """)
+
+            # ------------------------------------------------------------------ #
             # Indexes (database_schema.md)                                         #
             # ------------------------------------------------------------------ #
             cursor.execute("""
