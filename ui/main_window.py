@@ -50,6 +50,7 @@ from services.support.reporting_interface import AbstractReportService
 from services.support.support_service import SupportService
 from services.tray_service import TrayService
 from services.update_announcements_service import UpdateAnnouncementsService
+from services.update_center_service import UpdateCenterService
 from tracker.tracking_state import TrackingState
 from trackora.core.build_info import BUILD_CHANNEL
 from trackora.core.environment import Environment
@@ -65,9 +66,11 @@ from ui.settings.settings_controller import SettingsController
 from ui.settings.settings_view import SettingsView
 from ui.support_center.support_center_controller import SupportCenterController
 from ui.support_center.support_center_widget import SupportCenterWidget
+from ui.dialogs.update_dialog import UpdateDialog
 from ui.themes.theme_manager import Theme, ThemeManager
 from ui.widgets.charts_controller import ChartsController
 from ui.widgets.charts_view import ChartsView
+from ui.widgets.update_banner import UpdateBanner
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +141,9 @@ class MainWindow(QMainWindow):
         self._create_menu_actions()
         self._setup_tray()
         self._setup_auto_refresh()
+
+        # Non-blocking startup update check
+        QTimer.singleShot(5000, self._perform_startup_update_check)
 
         # Ensure clean shutdown even on OS shutdown
         app = QApplication.instance()
@@ -217,6 +223,17 @@ class MainWindow(QMainWindow):
         )
         self._content.addWidget(self._charts_view)
 
+        self._update_service = UpdateCenterService(
+            settings_repo=self._settings_repo,
+            repo="anomalyco/trackora",
+        )
+
+        self._update_banner = UpdateBanner(self._content)
+        self._update_banner.ignored.connect(self._on_update_banner_ignored)
+        self._update_banner.view_notes_requested.connect(self._on_show_release_notes)
+        self._update_banner.hide()
+        self._content.layout().insertWidget(0, self._update_banner)
+
         self._settings_view = SettingsView(self)
         self._settings_ctrl = SettingsController(
             view=self._settings_view,
@@ -224,6 +241,7 @@ class MainWindow(QMainWindow):
             theme_manager=self._theme_manager,
             export_service=self._export_service,
             parent_widget=self,
+            update_service=self._update_service,
         )
         self._content.addWidget(self._settings_view)
 
@@ -271,6 +289,7 @@ class MainWindow(QMainWindow):
         self._tray.show_requested.connect(self._show_from_tray)
         self._tray.dashboard_requested.connect(lambda: (self.switch_to("Dashboard"), self._show_from_tray()))
         self._tray.history_requested.connect(lambda: (self.switch_to("History"), self._show_from_tray()))
+        self._tray.check_updates_requested.connect(self._on_check_updates_from_tray)
         self._tray.quit_requested.connect(self._quit_app)
         self._tray.show()
 
@@ -305,6 +324,36 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.quit()
+
+    def _perform_startup_update_check(self) -> None:
+        """Check for updates at startup, non-blocking."""
+        if not self._settings_repo.get_bool("update_auto_check_enabled", default=True):
+            return
+        try:
+            result = self._update_service.check_for_updates()
+            if result.update_available and self._update_service.is_update_available():
+                assert result.release is not None
+                self._update_banner.show(
+                    result.release.version, result.release.body
+                )
+                self._tray.show_notification(
+                    "Trackora Update",
+                    f"Trackora {result.release.version} is ready to download",
+                )
+        except Exception as exc:
+            logger.warning("Startup update check failed: %s", exc)
+
+    def _on_update_banner_ignored(self, version: str) -> None:
+        self._update_service.ignore_version(version)
+
+    def _on_check_updates_from_tray(self) -> None:
+        result = self._update_service.check_for_updates()
+        UpdateDialog(result, parent=self).exec()
+
+    def _on_show_release_notes(self) -> None:
+        result = self._update_service.get_cached_result()
+        if result and result.release:
+            UpdateDialog(result, parent=self).exec()
 
     def _refresh_current_view(self) -> None:
         widget = self._content.currentWidget()
