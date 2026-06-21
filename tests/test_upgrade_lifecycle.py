@@ -504,18 +504,18 @@ class TestBackupManagerIntegration:
         conn.commit()
         conn.close()
 
-        # Monkeypatch os.replace to fail on the first trackora.db replace
+        # Monkeypatch _replace_file to fail on the first trackora.db replace
         original_replace = os.replace
         replace_attempts = [0]
 
-        def failing_replace(src: str, dst: str) -> None:
-            if "trackora.db" in dst and replace_attempts[0] == 0:
+        def failing_replace(self, source: str, target: str) -> None:
+            if "trackora.db" in str(target) and replace_attempts[0] == 0:
                 replace_attempts[0] += 1
                 raise OSError("Simulated I/O error during replace")
-            return original_replace(src, dst)
+            return original_replace(source, target)
 
         mp = pytest.MonkeyPatch()
-        mp.setattr(bm_mod.os, "replace", failing_replace)
+        mp.setattr(bm_mod.BackupManager, "_replace_file", failing_replace)
         try:
             result = bm.restore_backup(created.backup_id)
         finally:
@@ -787,7 +787,7 @@ class TestFullUpgradeLifecycle:
         )
         result = mm.apply_all()
         assert result.success is True
-        assert result.applied_count == 4
+        assert result.applied_count == 5
 
     def test_newer_data_blocks_startup(self, tmp_path: Path) -> None:
         """schema_version > app_version → blocked."""

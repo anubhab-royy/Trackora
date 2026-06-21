@@ -102,6 +102,7 @@ class DailyActivityChart(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         self._plot.setMinimumHeight(220)
+        self._plot.setMaximumHeight(300)
         self._plot.showGrid(x=False, y=True, alpha=0.3)
         self._plot.getAxis("bottom").setLabel("Date", color=_COLOR_AXIS)
         self._plot.getAxis("left").setLabel("Hours", color=_COLOR_AXIS)

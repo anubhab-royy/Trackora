@@ -103,12 +103,10 @@ class TestLoadEnvFile:
 
     def test_handles_unreadable_file_gracefully(self, tmp_path: Path):
         env_file = tmp_path / ".env"
-        env_file.write_text("KEY=value\n", encoding="utf-8")
-        env_file.chmod(0o000)
+        env_file.mkdir()
         with patch.dict(os.environ, {}, clear=True):
             load_env_file(env_file)
             assert "KEY" not in os.environ
-        env_file.chmod(0o644)
 
     def test_handles_binary_file_gracefully(self, tmp_path: Path):
         env_file = tmp_path / ".env"

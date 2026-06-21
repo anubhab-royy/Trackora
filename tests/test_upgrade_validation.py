@@ -1049,3 +1049,261 @@ class TestFirstRunFlow:
         compat = svm.is_compatible(SchemaVersion.current_app_version(), data_ver)
         assert compat.can_proceed is True
         assert compat.status == "ok"
+
+
+class TestSchemaCreateIndexRegression:
+    """Regression tests for RB-9: v1.1.0→v2.0.0 schema upgrade path.
+
+    Verifies that _create_schema() no longer creates idx_games_platform
+    (that index belongs in the migration), and that a v1.1.0 database
+    without platform columns survives the initialise() path.
+    """
+
+    _V1_DDL = """
+        CREATE TABLE IF NOT EXISTS games (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            name             TEXT    NOT NULL,
+            process_name     TEXT    NOT NULL,
+            executable_path  TEXT    NOT NULL DEFAULT '',
+            icon_path        TEXT             DEFAULT NULL,
+            is_enabled       INTEGER NOT NULL DEFAULT 1,
+            first_played     DATETIME         DEFAULT NULL,
+            last_played      DATETIME         DEFAULT NULL,
+            created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS sessions (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            game_id          INTEGER NOT NULL REFERENCES games(id),
+            start_time       DATETIME NOT NULL,
+            end_time         DATETIME NOT NULL,
+            duration_seconds INTEGER  NOT NULL DEFAULT 0,
+            created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS active_sessions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            game_id     INTEGER NOT NULL REFERENCES games(id),
+            process_id  INTEGER NOT NULL,
+            start_time  DATETIME NOT NULL,
+            created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS settings (
+            key        TEXT PRIMARY KEY,
+            value      TEXT,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+    """
+
+    @pytest.fixture(autouse=True)
+    def _tmpdir(self, tmp_path: Path) -> None:
+        self.tmp_path = tmp_path
+
+    def _create_v1_db(self) -> sqlite3.Connection:
+        """Create and return a v1.1.0-style database (no platform columns)."""
+        db_path = self.tmp_path / "trackora_v1.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.executescript(self._V1_DDL)
+        conn.commit()
+        return conn
+
+    def _create_schema_db(self) -> sqlite3.Connection:
+        """Create a DatabaseManager instance, call _create_schema, return connection."""
+        from database.database_manager import DatabaseManager
+        db_path = self.tmp_path / "trackora_test.db"
+        dm = DatabaseManager(str(db_path))
+        dm.initialize()
+
+        cursor = dm.connection.cursor()
+        cursor.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='index' AND name='idx_games_platform'"
+        )
+        exists = cursor.fetchone() is not None
+        cursor.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name='games'"
+        )
+        games_exists = cursor.fetchone() is not None
+        cursor.execute("PRAGMA table_info(games)")
+        columns = {row[1] for row in cursor.fetchall()}
+        dm.connection.close()
+        return dm, exists, games_exists, columns
+
+    def test_create_schema_does_not_create_idx_games_platform(self) -> None:
+        dm, idx_exists, _, _ = self._create_schema_db()
+        assert idx_exists is False, (
+            "idx_games_platform should NOT be created by _create_schema(); "
+            "it belongs in migration v2_0_0_add_discovery_columns"
+        )
+
+    def test_create_schema_creates_games_table(self) -> None:
+        _, _, games_exists, columns = self._create_schema_db()
+        assert games_exists is True
+        assert "platform" in columns
+        assert "platform_id" in columns
+        assert "is_auto_discovered" in columns
+
+    def test_v1_database_survives_create_schema(self) -> None:
+        conn = self._create_v1_db()
+        conn.close()
+        from database.database_manager import DatabaseManager
+        db_path = self.tmp_path / "trackora_v1.db"
+        dm = DatabaseManager(str(db_path))
+        dm.initialize()
+        cursor = dm.connection.cursor()
+        cursor.execute("SELECT COUNT(*) FROM games")
+        dm.connection.close()
+
+    def test_v1_database_gets_migrations_table(self) -> None:
+        conn = self._create_v1_db()
+        conn.close()
+        from database.database_manager import DatabaseManager
+        db_path = self.tmp_path / "trackora_v1.db"
+        dm = DatabaseManager(str(db_path))
+        dm.initialize()
+        cursor = dm.connection.cursor()
+        cursor.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name='_migrations'"
+        )
+        assert cursor.fetchone() is not None
+        dm.connection.close()
+
+    def test_v1_database_migrates_to_v2_successfully(self) -> None:
+        conn = self._create_v1_db()
+        conn.close()
+        db_path = self.tmp_path / "trackora_v1.db"
+        schema_path = self.tmp_path / "schema.json"
+
+        from trackora.core.schema_version import SchemaVersion
+        from trackora.core.schema_version_manager import SchemaVersionManager
+        svm = SchemaVersionManager(schema_path=schema_path)
+        svm.write(SchemaVersion(1, 1, 0), description="v1.1.0 baseline")
+
+        from database.database_manager import DatabaseManager
+        dm = DatabaseManager(str(db_path))
+        dm.initialize()
+
+        from trackora.core.migration_manager import MigrationManager
+        from trackora.core.backup_manager import BackupManager
+        backup_dir = self.tmp_path / "backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        from trackora.core import paths
+        import trackora.core.paths as core_paths
+        original_path = core_paths.DATABASE_PATH
+        core_paths.DATABASE_PATH = db_path
+        try:
+            bm = BackupManager(
+                schema_version_manager=svm,
+                backup_dir=backup_dir,
+            )
+            mm = MigrationManager(
+                connection=dm.connection,
+                schema_version_manager=svm,
+                backup_manager=bm,
+            )
+
+            result = mm.apply_all()
+
+            assert result.success, (
+                f"Migration failed: {result.results}"
+            )
+            cursor = dm.connection.cursor()
+            cursor.execute("PRAGMA table_info(games)")
+            columns = {row[1] for row in cursor.fetchall()}
+            assert "platform" in columns, (
+                "platform column should exist after migration"
+            )
+            assert "platform_id" in columns
+            assert "is_auto_discovered" in columns
+            cursor.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type='index' AND name='idx_games_platform'"
+            )
+            assert cursor.fetchone() is not None, (
+                "idx_games_platform should exist after migration"
+            )
+        finally:
+            core_paths.DATABASE_PATH = original_path
+            dm.connection.close()
+
+    def test_v1_database_migration_preserves_existing_data(self) -> None:
+        conn = self._create_v1_db()
+        conn.execute(
+            "INSERT INTO games (name, process_name, executable_path, "
+            "first_played, last_played, created_at, updated_at) "
+            "VALUES ('Witcher 3', 'witcher3.exe', '/games/witcher3/witcher3.exe', "
+            "'2024-01-15T10:00:00', '2024-02-20T18:00:00', "
+            "'2024-01-01T00:00:00', '2024-02-20T18:00:00')"
+        )
+        conn.execute(
+            "INSERT INTO games (name, process_name, executable_path, "
+            "first_played, last_played, created_at, updated_at) "
+            "VALUES ('Hades', 'hades.exe', '/games/hades/hades.exe', "
+            "'2024-03-01T09:00:00', '2024-04-10T21:30:00', "
+            "'2024-03-01T09:00:00', '2024-04-10T21:30:00')"
+        )
+        conn.execute(
+            "INSERT INTO sessions (game_id, start_time, end_time, duration_seconds) "
+            "VALUES (1, '2024-01-15T10:00:00', '2024-01-15T14:30:00', 16200)"
+        )
+        conn.execute(
+            "INSERT INTO sessions (game_id, start_time, end_time, duration_seconds) "
+            "VALUES (2, '2024-03-01T10:00:00', '2024-03-01T12:00:00', 7200)"
+        )
+        conn.commit()
+        conn.close()
+
+        db_path = self.tmp_path / "trackora_v1.db"
+        schema_path = self.tmp_path / "schema.json"
+
+        from trackora.core.schema_version import SchemaVersion
+        from trackora.core.schema_version_manager import SchemaVersionManager
+        svm = SchemaVersionManager(schema_path=schema_path)
+        svm.write(SchemaVersion(1, 1, 0))
+
+        from database.database_manager import DatabaseManager
+        dm = DatabaseManager(str(db_path))
+        dm.initialize()
+
+        from trackora.core.migration_manager import MigrationManager
+        from trackora.core.backup_manager import BackupManager
+        backup_dir = self.tmp_path / "backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        from trackora.core import paths as core_paths
+        original_path = core_paths.DATABASE_PATH
+        core_paths.DATABASE_PATH = db_path
+        try:
+            bm = BackupManager(
+                schema_version_manager=svm,
+                backup_dir=backup_dir,
+            )
+            mm = MigrationManager(
+                connection=dm.connection,
+                schema_version_manager=svm,
+                backup_manager=bm,
+            )
+            result = mm.apply_all()
+            assert result.success
+
+            cursor = dm.connection.cursor()
+            rows = cursor.execute(
+                "SELECT name, platform, platform_id, is_auto_discovered "
+                "FROM games ORDER BY id"
+            ).fetchall()
+            assert len(rows) == 2
+            assert rows[0][0] == "Witcher 3"
+            assert rows[0][1] is None
+            assert rows[0][2] is None
+            assert rows[0][3] == 0
+            assert rows[1][0] == "Hades"
+
+            sessions = cursor.execute(
+                "SELECT COUNT(*) FROM sessions"
+            ).fetchone()[0]
+            assert sessions == 2
+        finally:
+            core_paths.DATABASE_PATH = original_path
+            dm.connection.close()

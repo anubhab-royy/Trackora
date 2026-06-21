@@ -160,16 +160,19 @@ class DatabaseManager:
             # ------------------------------------------------------------------ #
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS games (
-                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name             TEXT    NOT NULL,
-                    process_name     TEXT    NOT NULL,
-                    executable_path  TEXT    NOT NULL,
-                    icon_path        TEXT    NOT NULL DEFAULT '',
-                    is_enabled       INTEGER NOT NULL DEFAULT 1,
-                    first_played     DATETIME,
-                    last_played      DATETIME,
-                    created_at       DATETIME NOT NULL,
-                    updated_at       DATETIME NOT NULL
+                    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name               TEXT    NOT NULL,
+                    process_name       TEXT    NOT NULL,
+                    executable_path    TEXT    NOT NULL,
+                    icon_path          TEXT    NOT NULL DEFAULT '',
+                    is_enabled         INTEGER NOT NULL DEFAULT 1,
+                    platform           TEXT    DEFAULT NULL,
+                    platform_id        TEXT    DEFAULT NULL,
+                    is_auto_discovered INTEGER NOT NULL DEFAULT 0,
+                    first_played       DATETIME,
+                    last_played        DATETIME,
+                    created_at         DATETIME NOT NULL,
+                    updated_at         DATETIME NOT NULL
                 );
             """)
 
@@ -250,7 +253,6 @@ class DatabaseManager:
                 CREATE INDEX IF NOT EXISTS idx_active_sessions_game_id
                 ON active_sessions (game_id);
             """)
-
             self._connection.commit()
         except Exception:
             self._connection.rollback()

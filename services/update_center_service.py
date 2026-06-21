@@ -120,7 +120,7 @@ class UpdateCenterService:
             cached = self._get_cached_or_error()
             if cached:
                 cached.previously_checked = True
-            return cached or self._error_result("Rate-limited and no cache")
+            return cached or self._error_result("Update check already performed recently. Please try again later.")
 
         return self._fetch_and_cache()
 

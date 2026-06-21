@@ -10,7 +10,7 @@
 #
 
 # Version — keep in sync with trackora/__init__.py
-version = "1.1.0"
+version = "2.0.0"
 BLOCK_CIPHER_LIST = None
 
 a = Analysis(
@@ -27,6 +27,10 @@ a = Analysis(
         "psutil",
         "pymongo",
         "dns",
+        "dns.resolver",
+        "dns.rdtypes",
+        "dns.rdatatype",
+        "bson",
         # --- first-party packages & subpackages ---
         "database",
         "database.models",

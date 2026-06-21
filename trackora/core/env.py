@@ -25,6 +25,8 @@ def _discover_env_file(path: str | Path | None = None) -> Path | None:
       1. An explicit *path* argument.
       2. ``.env`` in the current working directory.
       3. ``.env`` in the project root (three levels up from this file).
+      4. ``.env`` in the application data directory (``BASE_DIR / ".env"``).
+         This is the expected location for production / packaged builds.
 
     Returns ``None`` when no file is found.
     """
@@ -34,9 +36,12 @@ def _discover_env_file(path: str | Path | None = None) -> Path | None:
             return p.resolve()
         return None
 
+    from trackora.core.paths import BASE_DIR
+
     candidates: list[Path] = [
         Path.cwd() / ".env",
         Path(__file__).resolve().parent.parent.parent / ".env",
+        BASE_DIR / ".env",
     ]
     for candidate in candidates:
         if candidate.is_file():

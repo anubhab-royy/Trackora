@@ -58,11 +58,17 @@ class SupportSubmitResult:
         return self.local_stored
 
 
-# Errors that should NOT be queued for retry (configuration issues).
+# Errors that should NOT be queued for retry (configuration / permanent issues).
 _NON_RETRYABLE_KEYWORDS = [
     "not configured",
-    "authentication failed",
+    "not available",
     "not found",
+    "authentication failed",
+    "permission denied",
+    "forbidden",
+    "invalid",
+    "bad request",
+    "unsupported",
     "check your",
 ]
 

@@ -106,6 +106,7 @@ class GameDistributionChart(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         self._plot.setMinimumHeight(220)
+        self._plot.setMaximumHeight(300)
         self._plot.showGrid(x=True, y=False, alpha=0.3)
         self._plot.getAxis("bottom").setLabel("Hours", color=_COLOR_AXIS)
         self._plot.getAxis("left").setLabel("", color=_COLOR_AXIS)

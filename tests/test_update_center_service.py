@@ -176,16 +176,16 @@ class TestUpdateCheckResult:
 
 class TestVersionComparison:
     def test_major_bump_is_newer(self) -> None:
-        assert UpdateCenterService._is_newer_version("2.0.0")
+        assert UpdateCenterService._is_newer_version("3.0.0")
 
     def test_minor_bump_is_newer(self) -> None:
-        assert UpdateCenterService._is_newer_version("1.2.0")
+        assert UpdateCenterService._is_newer_version("2.1.0")
 
     def test_patch_bump_is_newer(self) -> None:
-        assert UpdateCenterService._is_newer_version("1.1.1")
+        assert UpdateCenterService._is_newer_version("2.0.1")
 
     def test_same_version_not_newer(self) -> None:
-        assert not UpdateCenterService._is_newer_version("1.1.0")
+        assert not UpdateCenterService._is_newer_version("2.0.0")
 
     def test_older_version_not_newer(self) -> None:
         assert not UpdateCenterService._is_newer_version("1.0.0")
@@ -206,25 +206,25 @@ class TestVersionComparison:
 
 
 _SAMPLE_RELEASE_JSON = {
-    "tag_name": "v2.0.0",
-    "name": "Trackora 2.0.0",
-    "body": "## What's New\n- Automatic Game Discovery\n- Update Center",
-    "published_at": "2026-06-20T12:00:00Z",
-    "html_url": "https://github.com/anomalyco/trackora/releases/tag/v2.0.0",
+    "tag_name": "v3.0.0",
+    "name": "Trackora 3.0.0",
+    "body": "## What's New\n- Major update",
+    "published_at": "2026-07-01T12:00:00Z",
+    "html_url": "https://github.com/anomalyco/trackora/releases/tag/v3.0.0",
     "prerelease": False,
     "assets": [
         {
-            "name": "Trackora-Setup-2.0.0.exe",
+            "name": "Trackora-Setup-3.0.0.exe",
             "browser_download_url": (
                 "https://github.com/anomalyco/trackora/releases/download/"
-                "v2.0.0/Trackora-Setup-2.0.0.exe"
+                "v3.0.0/Trackora-Setup-3.0.0.exe"
             ),
         },
         {
-            "name": "Trackora-Portable-2.0.0.zip",
+            "name": "Trackora-Portable-3.0.0.zip",
             "browser_download_url": (
                 "https://github.com/anomalyco/trackora/releases/download/"
-                "v2.0.0/Trackora-Portable-2.0.0.zip"
+                "v3.0.0/Trackora-Portable-3.0.0.zip"
             ),
         },
     ],
@@ -245,10 +245,10 @@ class TestAPIFetch:
         service = self._make_service()
         release = service._fetch_latest_release()
 
-        assert release.tag_name == "v2.0.0"
-        assert release.version == "2.0.0"
-        assert release.name == "Trackora 2.0.0"
-        assert "Automatic Game Discovery" in release.body
+        assert release.tag_name == "v3.0.0"
+        assert release.version == "3.0.0"
+        assert release.name == "Trackora 3.0.0"
+        assert "Major update" in release.body
         assert release.html_url.startswith("https://github.com")
 
     @patch("services.update_center_service.urlopen")
@@ -704,14 +704,14 @@ class TestCheckForUpdates:
 
         assert result.update_available
         assert result.source == "remote"
-        assert result.latest_version == "2.0.0"
+        assert result.latest_version == "3.0.0"
         assert result.release is not None
 
     def test_happy_path_no_update(self, service_and_mock) -> None:
         """Remote → same version → update_available=False."""
         service, mock_urlopen = service_and_mock
         data = dict(_SAMPLE_RELEASE_JSON)
-        data["tag_name"] = "v1.1.0"  # same as __version__
+        data["tag_name"] = "v2.0.0"  # same as __version__
         mock_resp = MagicMock()
         mock_resp.read.return_value = json.dumps(data).encode("utf-8")
         mock_resp.headers = {}
@@ -721,7 +721,7 @@ class TestCheckForUpdates:
 
         assert not result.update_available
         assert result.source == "remote"
-        assert result.latest_version == "1.1.0"
+        assert result.latest_version == "2.0.0"
 
     def test_rate_limited_returns_cached(self, service_and_mock) -> None:
         """Checked recently → returns cached result, previously_checked=True."""
@@ -772,10 +772,10 @@ class TestCheckForUpdates:
         assert result.error is not None
 
     def test_ignored_version_not_available(self, service_and_mock) -> None:
-        """Ignored version → update_available=False."""
+        """Ignored version -> update_available=False."""
         service, mock_urlopen = service_and_mock
         repo = service._settings_repo
-        repo.set("update_ignored_version", "2.0.0")
+        repo.set("update_ignored_version", "3.0.0")
 
         mock_resp = MagicMock()
         mock_resp.read.return_value = json.dumps(_SAMPLE_RELEASE_JSON).encode("utf-8")
@@ -800,3 +800,4 @@ class TestCheckForUpdates:
         result = service.check_for_updates()
 
         assert not result.update_available
+

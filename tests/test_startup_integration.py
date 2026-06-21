@@ -333,7 +333,7 @@ class TestFullStartupIntegration:
         result = mm.apply_all()
         assert result.success is True
         assert svm.read() is not None
-        assert result.applied_count == 4
+        assert result.applied_count == 5
 
     def test_newer_data_blocks(self, tmp_path):
         """Newer data version → blocked."""

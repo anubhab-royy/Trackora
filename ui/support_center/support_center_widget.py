@@ -325,7 +325,6 @@ class SupportCenterWidget(QWidget):
         layout.addWidget(self._bug_severity)
 
         layout.addWidget(self._build_submit_section("report_bug"))
-        layout.addStretch()
         return page
 
     def _build_suggest_feature_page(self) -> QWidget:
@@ -368,7 +367,6 @@ class SupportCenterWidget(QWidget):
         layout.addWidget(self._feature_priority)
 
         layout.addWidget(self._build_submit_section("suggest_feature"))
-        layout.addStretch()
         return page
 
     def _build_feedback_page(self) -> QWidget:
@@ -407,7 +405,6 @@ class SupportCenterWidget(QWidget):
         layout.addWidget(self._feedback_contact)
 
         layout.addWidget(self._build_submit_section("feedback"))
-        layout.addStretch()
         return page
 
     def _build_upcoming_updates_page(self) -> QWidget:

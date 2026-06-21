@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -424,8 +425,10 @@ class TestApplyOne:
         from trackora.core.schema_version_manager import SchemaVersionManager
         from trackora.core.schema_version import SchemaVersion
         import tempfile
+        fd, tmp_path = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
         svm = SchemaVersionManager(
-            schema_path=Path(tempfile.mkstemp(suffix=".json")[1])
+            schema_path=Path(tmp_path)
         )
         svm.write(SchemaVersion(1, 0, 0))
         mgr = MigrationManager(
@@ -450,8 +453,10 @@ class TestApplyOne:
             "v9_9_9_verify_fail", "Verify fail", fail_verify=True
         )
         fail_registry = _make_registry([fail_cls])
+        fd, tmp_path = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
         svm = SchemaVersionManager(
-            schema_path=Path(tempfile.mkstemp(suffix=".json")[1])
+            schema_path=Path(tmp_path)
         )
         svm.write(SchemaVersion(1, 0, 0))
         mgr = MigrationManager(
@@ -578,8 +583,10 @@ class TestEdgeCases:
         from trackora.core.migration_manager import MigrationManager
         from trackora.core.schema_version_manager import SchemaVersionManager
 
+        fd, tmp_path = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
         svm = SchemaVersionManager(
-            schema_path=Path(tempfile.mkstemp(suffix=".json")[1])
+            schema_path=Path(tmp_path)
         )
         single = _make_migration_class(
             "v1_0_0_test", "Test migration", requires_backup=False
@@ -606,8 +613,10 @@ class TestEdgeCases:
         db_connection.execute("DROP TABLE IF EXISTS _migrations")
         db_connection.commit()
 
+        fd, tmp_path = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
         svm = SchemaVersionManager(
-            schema_path=Path(tempfile.mkstemp(suffix=".json")[1])
+            schema_path=Path(tmp_path)
         )
         svm.write(SchemaVersion(1, 0, 0))
         single = _make_migration_class(

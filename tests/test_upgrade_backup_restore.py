@@ -20,6 +20,7 @@ Validation domains:
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 import time
 from pathlib import Path
@@ -411,7 +412,10 @@ class TestWalModeDatabase:
             db_data = zf.read("trackora.db")
 
         import tempfile
-        tmp = Path(tempfile.mkstemp(suffix=".db")[1])
+        fd, tmp_path_str = tempfile.mkstemp(suffix=".db")
+        tmp = Path(tmp_path_str)
+        import os as _os_for_fd
+        _os_for_fd.close(fd)
         try:
             tmp.write_bytes(db_data)
             conn = sqlite3.connect(str(tmp))
@@ -453,24 +457,23 @@ class TestSafetyBackupRollback:
 
     def test_rollback_on_replace_failure(self, bm_v2: BackupManager, db_path: Path) -> None:
         import trackora.core.backup_manager as bm_mod
-        import os as _os
 
         bk = bm_v2.create_backup()
         assert bk.success is True
 
         before_rows = _games(sqlite3.connect(str(db_path)))
 
-        original_replace = _os.replace
+        original_replace_file = bm_mod.BackupManager._replace_file
         calls = [0]
 
-        def fail_first_db_replace(src: str, dst: str) -> None:
-            if "trackora.db" in dst and calls[0] == 0:
+        def fail_replace_file(self, source, target):
+            if "trackora.db" in str(target) and calls[0] == 0:
                 calls[0] += 1
                 raise OSError("Simulated I/O failure")
-            return original_replace(src, dst)
+            return original_replace_file(self, source, target)
 
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr(bm_mod.os, "replace", fail_first_db_replace)
+            mp.setattr(bm_mod.BackupManager, "_replace_file", fail_replace_file)
             result = bm_v2.restore_backup(bk.backup_id)
 
         assert result.success is False
@@ -482,7 +485,6 @@ class TestSafetyBackupRollback:
 
     def test_safety_backup_verify_called(self, bm_v2: BackupManager, db_path: Path) -> None:
         import trackora.core.backup_manager as bm_mod
-        import os as _os
 
         bk = bm_v2.create_backup()
         assert bk.success is True
@@ -494,18 +496,18 @@ class TestSafetyBackupRollback:
             verified_ids.append(bid)
             return original_verify(self, bid)
 
-        original_replace = _os.replace
+        original_replace_file = bm_mod.BackupManager._replace_file
         calls = [0]
 
-        def fail_replace(src: str, dst: str) -> None:
-            if "trackora.db" in dst and calls[0] == 0:
+        def fail_replace_file(self, source, target):
+            if "trackora.db" in str(target) and calls[0] == 0:
                 calls[0] += 1
                 raise OSError("Simulated failure")
-            return original_replace(src, dst)
+            return original_replace_file(self, source, target)
 
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(bm_mod.BackupManager, "verify_backup", tracking_verify)
-            mp.setattr(bm_mod.os, "replace", fail_replace)
+            mp.setattr(bm_mod.BackupManager, "_replace_file", fail_replace_file)
             result = bm_v2.restore_backup(bk.backup_id)
 
         assert result.success is False
@@ -514,7 +516,6 @@ class TestSafetyBackupRollback:
 
     def test_rollback_with_corrupt_safety_graceful(self, bm_v2: BackupManager, db_path: Path) -> None:
         import trackora.core.backup_manager as bm_mod
-        import os as _os
 
         bk = bm_v2.create_backup()
         assert bk.success is True
@@ -530,18 +531,18 @@ class TestSafetyBackupRollback:
                     result.backup_path.write_bytes(b"CORRUPTED_SAFETY_BACKUP")
             return result
 
-        original_replace = _os.replace
+        original_replace_file = bm_mod.BackupManager._replace_file
         calls = [0]
 
-        def fail_replace(src, dst):
-            if "trackora.db" in dst and calls[0] == 0:
+        def fail_replace_file(self, source, target):
+            if "trackora.db" in str(target) and calls[0] == 0:
                 calls[0] += 1
-                raise OSError("Simulated replace failure")
-            return original_replace(src, dst)
+                raise OSError("Simulated copy failure")
+            return original_replace_file(self, source, target)
 
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(bm_mod.BackupManager, "create_backup", create_and_corrupt_safety)
-            mp.setattr(bm_mod.os, "replace", fail_replace)
+            mp.setattr(bm_mod.BackupManager, "_replace_file", fail_replace_file)
             result = bm_v2.restore_backup(bk.backup_id)
 
         assert result.success is False
