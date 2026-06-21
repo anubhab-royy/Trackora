@@ -88,6 +88,8 @@ class SupportCenterController:
             severity=data["severity"],
         )
         result = self._service.submit_bug_report(report)
+        if result.local_stored:
+            self._view.clear_bug_form()
         self._show_submit_result("report_bug", result)
 
     def _submit_feature(self) -> None:
@@ -105,6 +107,8 @@ class SupportCenterController:
             priority=data["priority"],
         )
         result = self._service.submit_feature_request(request)
+        if result.local_stored:
+            self._view.clear_feature_form()
         self._show_submit_result("suggest_feature", result)
 
     def _submit_feedback(self) -> None:
@@ -122,6 +126,8 @@ class SupportCenterController:
             contact_ok=data["contact_ok"],
         )
         result = self._service.submit_feedback(feedback)
+        if result.local_stored:
+            self._view.clear_feedback_form()
         self._show_submit_result("feedback", result)
 
     def _show_submit_result(

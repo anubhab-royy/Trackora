@@ -116,13 +116,12 @@ class MainWindow(QMainWindow):
         self._report_service: AbstractReportService = (
             report_service or GitHubIssueService(self._settings_repo)
         )
-        self._queue_service = ReportQueueService()
         self._announcements_service = UpdateAnnouncementsService(
             remote_url=self._get_announcements_url(),
         )
         self._support_service = support_service or SupportService(
             github_service=self._report_service,
-            queue_service=self._queue_service,
+            queue_service=ReportQueueService(),
             announcements_service=self._announcements_service,
         )
 
@@ -130,6 +129,9 @@ class MainWindow(QMainWindow):
         self._crash_service.mark_startup()
 
         self._process_report_queue()
+        self._queue_retry_timer = QTimer()
+        self._queue_retry_timer.timeout.connect(self._process_report_queue)
+        self._queue_retry_timer.start(60000)
 
         self.setWindowTitle(self._window_title())
         self.setMinimumSize(1000, 650)
@@ -427,17 +429,14 @@ class MainWindow(QMainWindow):
 
     def _process_report_queue(self) -> None:
         """Scan and submit any pending offline reports."""
-        pending = self._queue_service.count_pending()
-        if pending == 0:
-            return
-        logger.info("Found %d pending report(s), processing queue...", pending)
         try:
             result = self._support_service.process_queue()
-            if result and result.succeeded:
+            if result is None:
+                return
+            if result.attempted > 0:
                 logger.info(
-                    "Queue processing complete: %d submitted, %d failed.",
-                    result.succeeded,
-                    result.failed,
+                    "Queue processing: %d attempted, %d succeeded, %d failed.",
+                    result.attempted, result.succeeded, result.failed,
                 )
         except Exception as exc:
             logger.error("Queue processing error: %s", exc)

@@ -248,4 +248,4 @@ class TestQueueFallback:
         result = svc.submit_report(ReportType.BUG, "Test", "Body")
         assert isinstance(result, SubmitResult)
         assert result.success is False
-        assert "not available" in (result.error_message or "")
+        assert "connection failed" in (result.error_message or "")

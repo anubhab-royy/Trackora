@@ -190,6 +190,26 @@ class SupportCenterWidget(QWidget):
         if label is not None:
             label.setText("")
 
+    def clear_bug_form(self) -> None:
+        self._bug_title.clear()
+        self._bug_description.clear()
+        self._bug_steps.clear()
+        self._bug_expected.clear()
+        self._bug_actual.clear()
+        self._bug_severity.setCurrentIndex(0)
+
+    def clear_feature_form(self) -> None:
+        self._feature_title.clear()
+        self._feature_description.clear()
+        self._feature_use_case.clear()
+        self._feature_priority.setCurrentIndex(0)
+
+    def clear_feedback_form(self) -> None:
+        self._feedback_subject.clear()
+        self._feedback_message.clear()
+        self._feedback_category.setCurrentIndex(0)
+        self._feedback_contact.setChecked(False)
+
     def get_bug_form_data(self) -> dict:
         return {
             "title": self._bug_title.text().strip(),

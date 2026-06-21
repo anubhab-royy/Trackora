@@ -111,10 +111,17 @@ class MongoReportService(AbstractReportService):
     # ------------------------------------------------------------------
 
     def _insert(self, report_type: ReportType, doc: dict[str, Any]) -> SubmitResult:
-        if not self._connection.is_available or self._connection.database is None:
+        if not self._connection.is_available:
+            self._connection.health_check()
+            if not self._connection.is_available:
+                return SubmitResult(
+                    success=False,
+                    error_message="MongoDB connection failed.",
+                )
+        if self._connection.database is None:
             return SubmitResult(
                 success=False,
-                error_message="MongoDB not available.",
+                error_message="MongoDB not configured.",
             )
 
         self._ensure_indexes()
