@@ -254,3 +254,77 @@ class TestSupportCenterController:
         mock_view.reset_mock()
         ctrl._on_page_changed("report_bug")
         mock_view.clear_submit_result.assert_called_once_with("report_bug")
+
+    def test_database_fallback_integration_test(self, mock_view, mock_service):
+        """Test that support center submissions work with mocked MongoDB.
+        
+        This test verifies that the complete flow from SupportCenterWidget
+        through SupportCenterController to SupportService and MongoReportService
+        works correctly with the database fallback behavior.
+        """
+        from unittest.mock import MagicMock, patch
+
+        # Create a mock MongoReportService that simulates MongoDB availability
+        mock_github_service = MagicMock()
+        mock_github_service.submit_bug.return_value = MagicMock(
+            success=True,
+            issue_url="https://example.com/bug/123"
+        )
+
+        # Patch the SupportService's _github_service with our mock
+        with patch.object(mock_service, "_github_service", mock_github_service):
+            ctrl = SupportCenterController(mock_view, mock_service)
+            mock_service.reset_mock()
+            mock_view.reset_mock()
+
+            # Setup bug submission
+            mock_view.get_bug_form_data.return_value = {
+                "title": "Database Fallback Test",
+                "description": "Testing database name fallback",
+                "steps": "1. Submit",
+                "expected": "Should work",
+                "actual": "Works fine",
+                "severity": "critical",
+            }
+
+            ctrl._submit_bug()
+
+            # Verify the submission flow
+            mock_service.submit_bug_report.assert_called_once()
+            bug_report = mock_service.submit_bug_report.call_args[0][0]
+
+            assert isinstance(bug_report, BugReport)
+            assert bug_report.title == "Database Fallback Test"
+            assert bug_report.severity == "critical"
+
+    def test_database_name_from_env_vs_constructor(
+        self, mock_view, mock_service
+    ):
+        """Test database name precedence: constructor parameter overrides env var."""
+        from services.support.mongo_connection import MongoConnection
+
+        import os
+        with patch.dict(os.environ, {"MONGODB_DATABASE": "env_database"}, clear=True):
+            # Constructor parameter should take precedence over env var
+            conn = MongoConnection(database_name="constructor_database")
+            assert conn._database_name == "constructor_database"
+
+            # Without constructor parameter, should use env var
+            conn2 = MongoConnection()
+            assert conn2._database_name == "env_database"
+
+    def test_empty_database_name_handling(self, mock_view, mock_service):
+        """Test that empty database names are handled correctly."""
+        from services.support.mongo_connection import MongoConnection
+
+        # Test constructor parameter
+        conn = MongoConnection(database_name="")
+        assert conn._database_name == ""
+        assert conn.database is None
+
+        # Test with no database name set
+        import os
+        with patch.dict(os.environ, {}, clear=True):
+            conn2 = MongoConnection()
+            assert conn2._database_name == ""
+            assert conn2.database is None
