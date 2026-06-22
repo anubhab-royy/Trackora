@@ -70,6 +70,7 @@ from ui.dialogs.update_dialog import UpdateDialog
 from ui.themes.theme_manager import Theme, ThemeManager
 from ui.widgets.charts_controller import ChartsController
 from ui.widgets.charts_view import ChartsView
+from ui.history.history_view import HistoryView
 from ui.widgets.update_banner import UpdateBanner
 
 logger = logging.getLogger(__name__)
@@ -263,6 +264,7 @@ class MainWindow(QMainWindow):
 
     def _connect_nav(self) -> None:
         self._nav.currentRowChanged.connect(self._content.setCurrentIndex)
+        self._content.currentChanged.connect(self._on_page_changed)
         self._nav.setCurrentRow(0)
 
     def _create_menu_actions(self) -> None:
@@ -306,6 +308,19 @@ class MainWindow(QMainWindow):
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self._refresh_current_view)
         self._refresh_timer.start(5000)
+
+    def _on_page_changed(self, index: int) -> None:
+        """Refresh content when the visible page changes."""
+        widget = self._content.widget(index)
+        if isinstance(widget, ChartsView):
+            logger.debug("Page changed to Charts — refreshing chart data.")
+            self._charts_ctrl.refresh()
+        elif isinstance(widget, DashboardWidget):
+            logger.debug("Page changed to Dashboard — refreshing data.")
+            widget.refresh()
+        elif isinstance(widget, HistoryView):
+            logger.debug("Page changed to History — refreshing data.")
+            self._hist_ctrl.refresh()
 
     # ------------------------------------------------------------------
     # Slots
@@ -368,6 +383,10 @@ class MainWindow(QMainWindow):
         widget = self._content.currentWidget()
         if isinstance(widget, DashboardWidget):
             widget.refresh()
+        elif isinstance(widget, ChartsView):
+            self._charts_ctrl.refresh()
+        elif isinstance(widget, HistoryView):
+            self._hist_ctrl.refresh()
 
     # ------------------------------------------------------------------
     # Public API

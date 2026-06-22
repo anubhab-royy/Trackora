@@ -130,7 +130,7 @@ class ChartsView(QWidget):
             " border-radius: 10px; padding: 12px; }"
         )
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(16, 12, 16, 12)
+        card_layout.setContentsMargins(12, 8, 12, 8)
         card_layout.setSpacing(0)
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         return card
