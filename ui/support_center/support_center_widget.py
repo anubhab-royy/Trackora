@@ -190,6 +190,26 @@ class SupportCenterWidget(QWidget):
         if label is not None:
             label.setText("")
 
+    def clear_bug_form(self) -> None:
+        self._bug_title.clear()
+        self._bug_description.clear()
+        self._bug_steps.clear()
+        self._bug_expected.clear()
+        self._bug_actual.clear()
+        self._bug_severity.setCurrentIndex(0)
+
+    def clear_feature_form(self) -> None:
+        self._feature_title.clear()
+        self._feature_description.clear()
+        self._feature_use_case.clear()
+        self._feature_priority.setCurrentIndex(0)
+
+    def clear_feedback_form(self) -> None:
+        self._feedback_subject.clear()
+        self._feedback_message.clear()
+        self._feedback_category.setCurrentIndex(0)
+        self._feedback_contact.setChecked(False)
+
     def get_bug_form_data(self) -> dict:
         return {
             "title": self._bug_title.text().strip(),
@@ -325,7 +345,6 @@ class SupportCenterWidget(QWidget):
         layout.addWidget(self._bug_severity)
 
         layout.addWidget(self._build_submit_section("report_bug"))
-        layout.addStretch()
         return page
 
     def _build_suggest_feature_page(self) -> QWidget:
@@ -368,7 +387,6 @@ class SupportCenterWidget(QWidget):
         layout.addWidget(self._feature_priority)
 
         layout.addWidget(self._build_submit_section("suggest_feature"))
-        layout.addStretch()
         return page
 
     def _build_feedback_page(self) -> QWidget:
@@ -407,7 +425,6 @@ class SupportCenterWidget(QWidget):
         layout.addWidget(self._feedback_contact)
 
         layout.addWidget(self._build_submit_section("feedback"))
-        layout.addStretch()
         return page
 
     def _build_upcoming_updates_page(self) -> QWidget:

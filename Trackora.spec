@@ -10,7 +10,7 @@
 #
 
 # Version — keep in sync with trackora/__init__.py
-version = "1.1.0"
+version = "2.0.0"
 BLOCK_CIPHER_LIST = None
 
 a = Analysis(
@@ -25,15 +25,30 @@ a = Analysis(
         "PyQt6.QtSvg",
         "pyqtgraph",
         "psutil",
+        "pymongo",
+        "dns",
+        "dns.resolver",
+        "dns.rdtypes",
+        "dns.rdatatype",
+        "bson",
+        # --- first-party packages & subpackages ---
         "database",
         "database.models",
         "database.repositories",
         "services",
+        "services.crash",
+        "services.support",
         "services.update_service",
+        "trackora",
+        "trackora.core",
+        "trackora.core.migrations",
         "trackora_stats",
         "tracker",
+        "tracker.discovery",
+        "tracker.discovery.detectors",
         "ui",
         "ui.dashboard",
+        "ui.dialogs",
         "ui.games",
         "ui.history",
         "ui.settings",

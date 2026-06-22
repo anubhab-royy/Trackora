@@ -13,6 +13,23 @@ from services.support.report_queue_service import (
 from trackora.core.paths import BASE_DIR
 
 
+def _minimal_crash_data() -> dict:
+    """Return a minimal valid CrashReport field dict."""
+    return {
+        "report_id": "test-uuid",
+        "timestamp": "2024-01-01T00:00:00",
+        "app_version": "1.0.0",
+        "os_version": "Linux-6.0",
+        "os_platform": "Linux",
+        "active_sessions": [],
+        "tracked_games": 0,
+        "stack_trace": None,
+        "recent_log_entries": [],
+        "crash_type": "unhandled_exception",
+        "was_tracking": False,
+    }
+
+
 @pytest.fixture
 def queue(tmp_path: Path) -> ReportQueueService:
     return ReportQueueService(storage_dir=tmp_path / "pending_reports")
@@ -46,6 +63,16 @@ class TestSaveReport:
         p1 = queue.save_report("bug", {"title": "A"})
         p2 = queue.save_report("bug", {"title": "B"})
         assert p1.name != p2.name
+
+    def test_save_crash_creates_json(self, queue: ReportQueueService):
+        path = queue.save_report("crash", _minimal_crash_data())
+        assert path.exists()
+        assert path.suffix == ".json"
+
+    def test_save_crash_has_correct_type(self, queue: ReportQueueService):
+        path = queue.save_report("crash", _minimal_crash_data())
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        assert payload["type"] == "crash"
 
 
 class TestCountPending:
@@ -149,6 +176,36 @@ class TestProcessQueue:
         assert results[0][1]["subject"] == "FB"
         assert results[0][1]["message"] == "msg"
 
+    def test_process_queue_calls_submit_for_crash(self, queue: ReportQueueService):
+        queue.save_report("crash", _minimal_crash_data())
+        submitted = []
+
+        def submit(report_type: str, data: dict) -> bool:
+            submitted.append((report_type, data))
+            return True
+
+        result = queue.process_queue(submit)
+        assert result.attempted == 1
+        assert result.succeeded == 1
+        assert submitted[0][0] == "crash"
+        assert submitted[0][1]["report_id"] == "test-uuid"
+
+    def test_mixed_queue_processes_all_types(self, queue: ReportQueueService):
+        queue.save_report("bug", {"title": "A"})
+        queue.save_report("feature", {"title": "B"})
+        queue.save_report("feedback", {"subject": "C"})
+        queue.save_report("crash", _minimal_crash_data())
+        submitted = []
+
+        def submit(report_type: str, data: dict) -> bool:
+            submitted.append(report_type)
+            return True
+
+        result = queue.process_queue(submit)
+        assert result.attempted == 4
+        assert result.succeeded == 4
+        assert set(submitted) == {"bug", "feature", "feedback", "crash"}
+
 
 class TestClearAll:
     def test_clear_removes_all_files(self, queue: ReportQueueService):
@@ -215,6 +272,20 @@ class TestModelReconstruction:
         result = ReportQueueService.reconstruct_model("bug", data)
         assert result is None
 
+    def test_reconstruct_crash_report(self):
+        data = _minimal_crash_data()
+        model = ReportQueueService.reconstruct_model("crash", data)
+        from services.crash.diagnostic_service import CrashReport
+        assert isinstance(model, CrashReport)
+        assert model.report_id == "test-uuid"
+        assert model.crash_type == "unhandled_exception"
+        assert model.was_tracking is False
+
+    def test_reconstruct_crash_invalid_data_returns_none(self):
+        data = {"report_id": "missing-required-fields"}
+        result = ReportQueueService.reconstruct_model("crash", data)
+        assert result is None
+
 
 class TestGetGitHubMethod:
     def test_bug_method(self):
@@ -228,6 +299,9 @@ class TestGetGitHubMethod:
 
     def test_unknown_returns_none(self):
         assert ReportQueueService.get_github_method("unknown") is None
+
+    def test_crash_method(self):
+        assert ReportQueueService.get_github_method("crash") == "submit_crash"
 
 
 class TestOrphanedTmpCleanup:

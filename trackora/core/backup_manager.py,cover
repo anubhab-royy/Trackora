@@ -1,0 +1,535 @@
+> """
+> BackupManager — production-grade backup and recovery.
+  
+> BackupManager creates self-verifying ZIP archives that contain
+> the SQLite database, schema version file, manifest, and metadata.
+> It is the safety net for all upgrade and migration operations.
+  
+> Architecture rules:
+>     - No database imports.
+>     - No service imports.
+>     - No UI imports.
+>     - Only depends on trackora.core.paths, trackora.core.schema_version,
+>       trackora.core.schema_version_manager, and Python stdlib.
+> """
+  
+> from __future__ import annotations
+  
+> import hashlib
+> import json
+> import logging
+> import os
+> import sqlite3
+> import shutil
+> import sys
+> import uuid
+> from dataclasses import dataclass, field
+> from datetime import datetime, timezone
+> from pathlib import Path
+> from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile, ZipInfo
+  
+> from trackora.core.schema_version_manager import SchemaVersionManager
+  
+> logger = logging.getLogger(__name__)
+  
+  
+  # ── Data Classes ──────────────────────────────────────────────────
+  
+  
+> @dataclass(frozen=True)
+> class BackupResult:
+>     """Result of a backup creation operation."""
+  
+>     success: bool
+>     backup_id: str
+>     backup_path: Path | None
+>     size_bytes: int
+>     file_count: int
+>     created_at: datetime
+>     error: str | None = None
+  
+  
+> @dataclass(frozen=True)
+> class RestoreResult:
+>     """Result of a restore operation."""
+  
+>     success: bool
+>     backup_id: str
+>     safety_backup_id: str | None = None
+>     error: str | None = None
+  
+  
+> @dataclass(frozen=True)
+> class VerificationResult:
+>     """Result of a backup verification."""
+  
+>     valid: bool
+>     backup_id: str
+>     checksum_errors: list[str] = field(default_factory=list)
+>     missing_files: list[str] = field(default_factory=list)
+>     error: str | None = None
+  
+  
+> @dataclass(frozen=True)
+> class BackupInfo:
+>     """Summary information about a single backup."""
+  
+>     backup_id: str
+>     backup_path: Path
+>     size_bytes: int
+>     created_at: datetime
+>     schema_version: str
+>     trackora_version: str
+>     backup_type: str
+>     file_count: int
+  
+  
+  # ── BackupManager ─────────────────────────────────────────────────
+  
+  
+> class BackupManager:
+>     """Create, verify, restore, and manage backup archives.
+  
+>     Args:
+>         schema_version_manager: An initialized SchemaVersionManager
+>                                 instance for reading schema version
+>                                 metadata.
+>         backup_dir: Optional explicit path to the backup directory.
+>                     Defaults to BACKUPS_DIR from trackora.core.paths.
+>     """
+  
+>     def __init__(
+>         self,
+>         schema_version_manager: SchemaVersionManager,
+>         backup_dir: Path | None = None,
+>     ) -> None:
+>         self._schema_version_manager = schema_version_manager
+  
+>         if backup_dir is None:
+>             from trackora.core.paths import BACKUPS_DIR
+  
+>             backup_dir = BACKUPS_DIR
+  
+>         self._backup_dir: Path = (
+>             backup_dir if isinstance(backup_dir, Path) else Path(backup_dir)
+>         )
+  
+>         self._clean_orphan_tmp()
+>         self._clean_orphan_restore_dirs()
+  
+      # ── Public API ────────────────────────────────────────────────
+  
+>     def create_backup(
+>         self,
+>         backup_type: str = "manual",
+>     ) -> BackupResult:
+>         """Create a self-verifying backup archive.
+  
+>         Args:
+>             backup_type: Reason for the backup. One of "manual",
+>                          "pre_migration", "pre_restore", "scheduled".
+  
+>         Returns:
+>             BackupResult with success status and backup metadata.
+>         """
+>         from trackora.core.paths import DATABASE_PATH
+  
+          # Resolve source paths
+>         db_path = DATABASE_PATH
+>         schema_path: Path = self._schema_version_manager._schema_path  # type: ignore[attr-defined]
+  
+>         if not db_path.is_file():
+>             return BackupResult(
+>                 success=False,
+>                 backup_id="",
+>                 backup_path=None,
+>                 size_bytes=0,
+>                 file_count=0,
+>                 created_at=datetime.now(timezone.utc),
+>                 error=f"Database not found: {db_path}",
+>             )
+  
+>         backup_id = self._generate_backup_id()
+>         tmp_path = self._backup_dir / f"{backup_id}.zip.tmp"
+>         final_path = self._backup_dir / f"{backup_id}.zip"
+  
+>         self._backup_dir.mkdir(parents=True, exist_ok=True)
+  
+          # Copy database to a temporary staging file
+>         db_staging = self._backup_dir / f".{backup_id}.db"
+>         try:
+>             self._copy_database(db_path, db_staging)
+  
+              # Collect source file contents
+>             db_bytes = db_staging.read_bytes()
+>             schema_exists = schema_path.is_file()
+>             if not schema_exists:
+>                 logger.warning(
+>                     "Schema file not found: %s — backup will not include schema.json",
+>                     schema_path,
+>                 )
+>             schema_bytes = schema_path.read_bytes() if schema_exists else b""
+  
+              # Build metadata
+>             metadata = self._build_metadata(backup_type)
+>             metadata_bytes = (
+>                 json.dumps(metadata, indent=2, ensure_ascii=False).encode("utf-8")
+>                 + b"\n"
+>             )
+  
+              # Compute checksums for data files
+>             db_sha = self._compute_sha256(db_bytes)
+>             schema_sha = self._compute_sha256(schema_bytes) if schema_exists else ""
+>             meta_sha = self._compute_sha256(metadata_bytes)
+  
+              # Build manifest files array (3 data entries; MANIFEST.json
+              # added after its own SHA is computed)
+>             data_entries = []
+>             data_entries.append(
+>                 {
+>                     "path": "trackora.db",
+>                     "size": len(db_bytes),
+>                     "sha256": db_sha,
+>                 }
+>             )
+>             if schema_exists:
+>                 data_entries.append(
+>                     {
+>                         "path": "schema.json",
+>                         "size": len(schema_bytes),
+>                         "sha256": schema_sha,
+>                     }
+>                 )
+>             data_entries.append(
+>                 {
+>                     "path": "metadata.json",
+>                     "size": len(metadata_bytes),
+>                     "sha256": meta_sha,
+>                 }
+>             )
+  
+              # Read schema version for manifest
+>             try:
+>                 sv = self._schema_version_manager.read()
+>                 sv_str = str(sv) if sv is not None else ""
+!             except Exception:
+!                 sv_str = ""
+  
+              # Build manifest without self-entry to compute its own SHA
+>             import trackora
+  
+>             manifest_base = {
+>                 "manifest_version": "1.0",
+>                 "backup_version": 1,
+>                 "created_at": datetime.now(timezone.utc).strftime(
+>                     "%Y-%m-%dT%H:%M:%S.%fZ"
+>                 ),
+>                 "schema_version": sv_str,
+>                 "trackora_version": trackora.__version__,
+>                 "backup_type": backup_type,
+>                 "backup_id": backup_id,
+>                 "file_count": 1 + len(data_entries),  # +1 for MANIFEST.json
+>                 "files": data_entries,
+>             }
+  
+              # Compute MANIFEST.json's own SHA from the base bytes
+>             base_bytes = (
+>                 json.dumps(manifest_base, indent=2, ensure_ascii=False).encode("utf-8")
+>                 + b"\n"
+>             )
+>             manifest_sha = self._compute_sha256(base_bytes)
+>             manifest_size = len(base_bytes)
+  
+              # Build final files array with MANIFEST.json first
+>             final_files = [
+>                 {
+>                     "path": "MANIFEST.json",
+>                     "size": manifest_size,
+>                     "sha256": manifest_sha,
+>                 },
+>                 *data_entries,
+>             ]
+  
+>             manifest_final = dict(manifest_base)
+>             manifest_final["files"] = final_files
+>             manifest_bytes = (
+>                 json.dumps(manifest_final, indent=2, ensure_ascii=False).encode("utf-8")
+>                 + b"\n"
+>             )
+  
+              # Create ZIP archive
+>             with ZipFile(tmp_path, "w", ZIP_DEFLATED) as zf:
+                  # MANIFEST.json uncompressed for fast verification
+>                 zf.writestr(
+>                     ZipInfo("MANIFEST.json"),
+>                     manifest_bytes,
+>                     compress_type=ZIP_STORED,
+>                 )
+                  # trackora.db
+>                 zf.writestr("trackora.db", db_bytes)
+                  # schema.json (if exists)
+>                 if schema_exists:
+>                     zf.writestr("schema.json", schema_bytes)
+                  # metadata.json
+>                 zf.writestr("metadata.json", metadata_bytes)
+  
+              # Atomic rename
+>             os.replace(str(tmp_path), str(final_path))
+  
+>             size_bytes = final_path.stat().st_size
+>             return BackupResult(
+>                 success=True,
+>                 backup_id=backup_id,
+>                 backup_path=final_path,
+>                 size_bytes=size_bytes,
+>                 file_count=manifest_final["file_count"],
+>                 created_at=datetime.now(timezone.utc),
+>             )
+  
+!         except OSError as exc:
+              # Clean up .tmp on failure
+!             try:
+!                 tmp_path.unlink(missing_ok=True)
+!             except OSError:
+!                 pass
+!             return BackupResult(
+!                 success=False,
+!                 backup_id=backup_id,
+!                 backup_path=None,
+!                 size_bytes=0,
+!                 file_count=0,
+!                 created_at=datetime.now(timezone.utc),
+!                 error=str(exc),
+!             )
+!         except Exception as exc:
+!             try:
+!                 tmp_path.unlink(missing_ok=True)
+!             except OSError:
+!                 pass
+!             return BackupResult(
+!                 success=False,
+!                 backup_id=backup_id,
+!                 backup_path=None,
+!                 size_bytes=0,
+!                 file_count=0,
+!                 created_at=datetime.now(timezone.utc),
+!                 error=str(exc),
+!             )
+!         finally:
+              # Clean up staging database copy
+>             if db_staging.exists():
+>                 try:
+>                     db_staging.unlink()
+!                 except OSError:
+!                     pass
+  
+>     def verify_backup(
+>         self,
+>         backup_id: str,
+>     ) -> VerificationResult:
+>         """Verify the integrity of a backup archive.
+  
+>         Checks ZIP integrity, manifest structure, file presence,
+>         file count, and SHA-256 checksums for all files except
+>         MANIFEST.json (self-referential by design — verified via
+>         ZIP CRC-32).
+  
+>         Args:
+>             backup_id: The backup identifier (without .zip suffix).
+  
+>         Returns:
+>             VerificationResult with validity status and details.
+>         """
+>         zip_path = self._backup_dir / f"{backup_id}.zip"
+  
+>         if not zip_path.is_file():
+>             return VerificationResult(
+>                 valid=False,
+>                 backup_id=backup_id,
+>                 error=f"Backup not found: {backup_id}",
+>             )
+  
+          # Try to open as ZIP
+>         try:
+>             zf = ZipFile(zip_path, "r")
+>         except Exception as exc:
+>             return VerificationResult(
+>                 valid=False,
+>                 backup_id=backup_id,
+>                 error=f"Corrupt or invalid ZIP: {exc}",
+>             )
+  
+>         with zf:
+              # Check for MANIFEST.json
+>             if "MANIFEST.json" not in zf.namelist():
+>                 return VerificationResult(
+>                     valid=False,
+>                     backup_id=backup_id,
+>                     error="MANIFEST.json not found in backup archive",
+>                 )
+  
+              # Parse manifest
+>             try:
+>                 manifest = json.loads(zf.read("MANIFEST.json"))
+>             except json.JSONDecodeError as exc:
+>                 return VerificationResult(
+>                     valid=False,
+>                     backup_id=backup_id,
+>                     error=f"Invalid MANIFEST.json: {exc}",
+>                 )
+  
+              # Validate manifest is a dict with required fields
+>             if not isinstance(manifest, dict):
+!                 return VerificationResult(
+!                     valid=False,
+!                     backup_id=backup_id,
+!                     error="MANIFEST.json is not a JSON object",
+!                 )
+  
+>             required_fields = [
+>                 "manifest_version",
+>                 "backup_version",
+>                 "file_count",
+>                 "files",
+>             ]
+>             for field in required_fields:
+>                 if field not in manifest:
+!                     return VerificationResult(
+!                         valid=False,
+!                         backup_id=backup_id,
+!                         error=f"MANIFEST.json missing required field: {field}",
+!                     )
+  
+>             file_entries = manifest.get("files", [])
+  
+              # Validate internal file_count consistency
+>             expected_count = manifest["file_count"]
+>             if expected_count != len(file_entries):
+>                 return VerificationResult(
+>                     valid=False,
+>                     backup_id=backup_id,
+>                     error=(
+>                         f"File count mismatch: manifest says {expected_count}, "
+>                         f"files array has {len(file_entries)}"
+>                     ),
+>                 )
+  
+              # Verify each file in the manifest
+>             checksum_errors: list[str] = []
+>             missing_files: list[str] = []
+>             zip_names = set(zf.namelist())
+  
+>             for entry in file_entries:
+>                 path = entry.get("path", "")
+>                 expected_sha = entry.get("sha256", "")
+  
+                  # Skip MANIFEST.json self-checksum (circular by design)
+>                 if path == "MANIFEST.json":
+>                     continue
+  
+>                 if path not in zip_names:
+>                     missing_files.append(path)
+>                     continue
+  
+>                 try:
+>                     data = zf.read(path)
+>                     actual_sha = self._compute_sha256(data)
+!                 except Exception:
+!                     checksum_errors.append(path)
+!                     continue
+  
+>                 if actual_sha != expected_sha:
+>                     checksum_errors.append(path)
+  
+>             is_valid = (
+>                 len(checksum_errors) == 0
+>                 and len(missing_files) == 0
+>             )
+  
+>             return VerificationResult(
+>                 valid=is_valid,
+>                 backup_id=backup_id,
+>                 checksum_errors=checksum_errors,
+>                 missing_files=missing_files,
+>             )
+  
+      # ── Internal helpers ────────────────────────────────────────────
+  
+>     def _clean_orphan_tmp(self) -> None:
+>         """Remove orphaned .zip.tmp files from the backup directory."""
+>         if not self._backup_dir.is_dir():
+>             return
+>         for child in self._backup_dir.iterdir():
+>             if child.suffix == ".tmp" and child.name.endswith(".zip.tmp"):
+>                 try:
+>                     child.unlink()
+>                     logger.debug("Cleaned orphan temporary file: %s", child)
+>                 except OSError as exc:
+>                     logger.warning(
+>                         "Could not clean orphan temporary file %s: %s",
+>                         child,
+>                         exc,
+>                     )
+  
+>     def _clean_orphan_restore_dirs(self) -> None:
+>         """Remove orphaned .restore_* staging directories."""
+>         if not self._backup_dir.is_dir():
+>             return
+>         for child in self._backup_dir.iterdir():
+>             if child.is_dir() and child.name.startswith(".restore_"):
+>                 try:
+>                     shutil.rmtree(child)
+>                     logger.debug("Cleaned orphan restore directory: %s", child)
+!                 except OSError as exc:
+!                     logger.warning(
+!                         "Could not clean orphan restore directory %s: %s",
+!                         child,
+!                         exc,
+!                     )
+  
+>     @staticmethod
+>     def _generate_backup_id() -> str:
+>         """Generate a unique backup identifier.
+  
+>         Format: backup_<YYYYMMDD>_<HHMMSS>_<uuid4 first 8 chars>
+>         """
+>         now = datetime.now(timezone.utc)
+>         ts = now.strftime("%Y%m%d_%H%M%S")
+>         uid = uuid.uuid4().hex[:8]
+>         return f"backup_{ts}_{uid}"
+  
+>     @staticmethod
+>     def _compute_sha256(data: bytes) -> str:
+>         """Compute the SHA-256 hex digest of *data*."""
+>         return hashlib.sha256(data).hexdigest()
+  
+>     @staticmethod
+>     def _copy_database(src: Path, dst: Path) -> None:
+>         """Copy a live SQLite database using the online backup API.
+  
+>         Performs a WAL checkpoint before backup for consistency.
+>         """
+>         with sqlite3.connect(str(src)) as src_conn:
+>             try:
+>                 src_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+!             except sqlite3.OperationalError:
+!                 pass
+>             with sqlite3.connect(str(dst)) as dst_conn:
+>                 src_conn.backup(dst_conn, pages=-1)
+  
+>     @staticmethod
+>     def _build_metadata(backup_type: str) -> dict[str, str]:
+>         """Build the metadata.json content."""
+>         import sys as _sys
+  
+>         from trackora import __version__ as app_version
+>         from trackora.core.environment import CURRENT_ENVIRONMENT
+  
+>         return {
+>             "environment": CURRENT_ENVIRONMENT,
+>             "platform": _sys.platform,
+>             "python_version": _sys.version.split()[0],
+>             "application_version": app_version,
+>             "backup_reason": backup_type,
+>             "notes": "",
+>         }

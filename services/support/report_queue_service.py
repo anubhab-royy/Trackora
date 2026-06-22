@@ -28,6 +28,7 @@ from uuid import uuid4
 from models.support.bug_report import BugReport
 from models.support.feature_request import FeatureRequest
 from models.support.feedback_report import FeedbackReport
+from services.crash.diagnostic_service import CrashReport
 from trackora.core.paths import BASE_DIR
 
 logger = logging.getLogger(__name__)
@@ -36,12 +37,14 @@ _REPORT_TYPE_MAP: dict[str, type] = {
     "bug": BugReport,
     "feature": FeatureRequest,
     "feedback": FeedbackReport,
+    "crash": CrashReport,
 }
 
 _GITHUB_METHOD_MAP: dict[str, str] = {
     "bug": "submit_bug",
     "feature": "submit_feature",
     "feedback": "submit_feedback",
+    "crash": "submit_crash",
 }
 
 

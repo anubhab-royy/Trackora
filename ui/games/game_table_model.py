@@ -17,11 +17,12 @@ from database.models import Game
 
 logger = logging.getLogger(__name__)
 
-_COLUMNS = ["Name", "Process Name", "Executable Path", "Tracking"]
+_COLUMNS = ["Name", "Platform", "Process Name", "Executable Path", "Tracking"]
 _COL_NAME = 0
-_COL_PROCESS = 1
-_COL_PATH = 2
-_COL_ENABLED = 3
+_COL_PLATFORM = 1
+_COL_PROCESS = 2
+_COL_PATH = 3
+_COL_ENABLED = 4
 
 
 class GameTableModel(QAbstractTableModel):
@@ -96,6 +97,8 @@ class GameTableModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.DisplayRole:
             if col == _COL_NAME:
                 return game.name
+            if col == _COL_PLATFORM:
+                return game.platform.capitalize() if game.platform else "—"
             if col == _COL_PROCESS:
                 return game.process_name
             if col == _COL_PATH:

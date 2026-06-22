@@ -2,16 +2,19 @@
 Trackora entry point.
 
 Assembles all layers via dependency injection and starts the application
-with a QApplication, main window, system tray, and background process monitor.
+with an upgrade lifecycle (schema check → backup → migrate), then normal
+initialisation (repos → services → UI).
 """
 
 from __future__ import annotations
 
+import atexit
 import logging
+import os
 import sys
 
 from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from database.database_manager import DatabaseManager
 from database.repositories import (
@@ -20,16 +23,25 @@ from database.repositories import (
     SessionsRepository,
     SettingsRepository,
 )
+from services.crash.crash_service import CrashService
+from services.crash.diagnostic_service import DiagnosticService
 from services.export_service import ExportService
 from services.game_service import GameService
 from services.logging_service import LoggingService
 from services.session_history_service import SessionHistoryService
 from services.startup_service import StartupService
 from services.support.report_queue_service import ReportQueueService
-from services.support.supabase_report_service import SupabaseReportService
+from services.support.mongo_connection import MongoConnection
+from services.support.mongo_report_service import MongoReportService
 from services.support.support_service import SupportService
 from services.update_announcements_service import UpdateAnnouncementsService
+from trackora.core.backup_manager import BackupManager
+from trackora.core.environment import CURRENT_ENVIRONMENT
+from trackora.core.env import load_env_file
+from trackora.core.migration_manager import MigrationManager
 from trackora.core.paths import DATABASE_PATH, ensure_dirs
+from trackora.core.schema_version import SchemaVersion
+from trackora.core.schema_version_manager import SchemaVersionManager
 from trackora.core.single_instance import acquire as _acquire_lock
 from trackora.core.single_instance import release as _release_lock
 from trackora_stats.playtime_calculator import PlaytimeCalculator
@@ -44,15 +56,62 @@ from tracker import (
 from ui.main_window import MainWindow
 from ui.themes.theme_manager import ThemeManager
 
+logger = logging.getLogger(__name__)
+
+_EXPECTED_GAME_COLUMNS: frozenset[str] = frozenset({
+    "platform", "platform_id", "is_auto_discovered",
+})
+
+
+def _ensure_schema_columns(conn: object) -> None:
+    """Add missing columns to the games table if schema.json was written
+    without running actual migrations (e.g. a frozen build that couldn't
+    discover migration modules via ``pkgutil.iter_modules``).
+
+    Idempotent and safe to call on every startup when schema version matches.
+    """
+    import sqlite3
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute("PRAGMA table_info(games)")
+    except sqlite3.OperationalError:
+        return  # games table doesn't exist yet — nothing to fix
+    existing = {row[1] for row in cursor.fetchall()}
+    missing = _EXPECTED_GAME_COLUMNS - existing
+    if not missing:
+        return
+
+    logger.warning("Games table missing columns: %s — adding them now", missing)
+    for col in sorted(missing):
+        if col == "platform":
+            conn.execute("ALTER TABLE games ADD COLUMN platform TEXT DEFAULT NULL;")
+        elif col == "platform_id":
+            conn.execute("ALTER TABLE games ADD COLUMN platform_id TEXT DEFAULT NULL;")
+        elif col == "is_auto_discovered":
+            conn.execute("ALTER TABLE games ADD COLUMN is_auto_discovered INTEGER DEFAULT 0;")
+    try:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_games_platform ON games (platform);")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+    logger.info("Added missing columns: %s", missing)
+
 
 def main() -> None:
     LoggingService.setup()
-    logger = logging.getLogger(__name__)
+
+    load_env_file()
+
+    app_version = SchemaVersion.current_app_version()
+    logger.info(
+        "Trackora starting — version %s, environment %s",
+        app_version, CURRENT_ENVIRONMENT.value,
+    )
 
     if not _acquire_lock():
         logger.warning("Another Trackora instance is already running.")
         _app = QApplication(sys.argv)
-        from PyQt6.QtWidgets import QMessageBox
         QMessageBox.warning(
             None, "Trackora",
             "Another instance of Trackora is already running.",
@@ -71,6 +130,108 @@ def main() -> None:
     db.initialize()
     conn = db.connection
 
+    # ── Upgrade Lifecycle ─────────────────────────────────────────
+    schema_version_manager = SchemaVersionManager()
+    data_version = schema_version_manager.read()
+    compat = schema_version_manager.is_compatible(app_version, data_version)
+
+    logger.info(
+        "App version: %s, Data version: %s | status: %s",
+        app_version, data_version, compat.status,
+    )
+
+    if not compat.can_proceed and compat.status == "newer_data":
+        QMessageBox.critical(
+            None, "Incompatible Database",
+            compat.message,
+        )
+        logger.critical("Startup blocked: %s", compat.message)
+        sys.exit(2)
+
+    crash_service = CrashService(diagnostic_service=DiagnosticService())
+    crash_result = crash_service.check_for_crash()
+    if crash_result.has_crashed:
+        logger.warning(
+            "Previous session crashed — report %s saved to %s",
+            crash_result.report.report_id if crash_result.report else "unknown",
+            crash_result.report_path,
+        )
+    crash_service.mark_startup()
+
+    if compat.status == "first_run":
+        schema_version_manager.write(app_version)
+        logger.info("First run — schema version set to %s", app_version)
+
+    elif compat.status == "ok":
+        _ensure_schema_columns(conn)
+
+    elif compat.status == "needs_migration":
+        logger.info("Pre-migration backup started")
+        backup_manager = BackupManager(schema_version_manager)
+        bk = backup_manager.create_backup(backup_type="pre_migration")
+        if not bk.success:
+            QMessageBox.critical(
+                None, "Backup Failed",
+                f"Could not create a backup before migration: {bk.error}\n\n"
+                "Please ensure the backup directory is writable and has "
+                "sufficient disk space.",
+            )
+            logger.critical("Pre-migration backup failed: %s", bk.error)
+            sys.exit(3)
+
+        logger.info("Pre-migration backup completed: %s", bk.backup_id)
+
+        migration_manager = MigrationManager(
+            connection=conn,
+            schema_version_manager=schema_version_manager,
+            backup_manager=backup_manager,
+        )
+        pending = migration_manager.get_pending_migrations()
+        logger.info("Migration started — %d pending", len(pending))
+        migration_result = migration_manager.apply_all()
+
+        for attempt in migration_result.results:
+            if attempt.success:
+                logger.info(
+                    "Migration applied: %s (%dms)",
+                    attempt.migration_id, attempt.duration_ms,
+                )
+            else:
+                logger.warning(
+                    "Migration failed: %s (%dms) — %s",
+                    attempt.migration_id, attempt.duration_ms, attempt.error,
+                )
+
+        if not migration_result.success:
+            logger.critical(
+                "Migration failed — applied: %d, failed: %d. "
+                "Startup aborted.",
+                migration_result.applied_count,
+                migration_result.failed_count,
+            )
+            QMessageBox.critical(
+                None, "Migration Failed",
+                f"Database migration failed.\n\n"
+                f"Applied: {migration_result.applied_count}\n"
+                f"Failed: {migration_result.failed_count}\n\n"
+                "Trackora cannot start with an incompletely migrated "
+                "database.\n\n"
+                "A pre-migration backup was created automatically. "
+                "To restore, run:\n"
+                "  trackora restore <backup_id>",
+            )
+            sys.exit(4)
+
+        if migration_result.final_version:
+            schema_version_manager.write(
+                SchemaVersion.from_string(migration_result.final_version),
+                description=f"Migration to {migration_result.final_version}",
+            )
+            logger.info(
+                "Schema version updated to %s", migration_result.final_version,
+            )
+    # ── End Upgrade Lifecycle ─────────────────────────────────────
+
     games_repo = GamesRepository(conn)
     sessions_repo = SessionsRepository(conn)
     active_sessions_repo = ActiveSessionsRepository(conn)
@@ -83,17 +244,19 @@ def main() -> None:
     export_service = ExportService(sessions_repo, games_repo, settings_repo)
 
     # ------------------------------------------------------------------
-    # Reporting backend (Supabase, fallback to offline queue)
+    # Reporting backend (MongoDB, fallback to offline queue)
     # ------------------------------------------------------------------
-    report_service = SupabaseReportService()
-    if report_service.is_configured:
-        logger.info("Supabase reporting: configured")
+    mongo = MongoConnection(
+        database_name=os.environ.get("MONGODB_DATABASE"),
+    )
+    if mongo.health_check():
+        logger.info("MongoDB reporting: connected")
     else:
         logger.warning(
-            "Supabase reporting: not configured — "
-            "reports will be queued offline until a backend is available. "
-            "Set SUPABASE_URL and SUPABASE_ANON_KEY to enable."
+            "MongoDB reporting: not available — "
+            "reports will be queued offline."
         )
+    report_service = MongoReportService(connection=mongo)
     queue_service = ReportQueueService()
     announcements_service = UpdateAnnouncementsService(
         remote_url=(
@@ -169,6 +332,7 @@ def main() -> None:
     process_monitor.start()
     window.show()
 
+    atexit.register(crash_service.mark_clean_shutdown)
     logger.info("Trackora started — database: %s", DATABASE_PATH)
     sys.exit(app.exec())
 

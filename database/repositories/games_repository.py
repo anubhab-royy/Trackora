@@ -23,19 +23,37 @@ from database.models.game import Game
 logger = logging.getLogger(__name__)
 
 
+def _safe_get(row: sqlite3.Row, key: str, default: object = None) -> object:
+    """Safely access a column by name, returning *default* if missing.
+
+    Handles the case where a row was read from an older schema that
+    doesn't have the column yet (e.g. before a migration runs).
+    """
+    try:
+        return row[key]
+    except (IndexError, KeyError):
+        return default
+
+
 def _row_to_game(row: sqlite3.Row) -> Game:
     """Convert a sqlite3.Row from the games table into a Game dataclass."""
+    platform = _safe_get(row, "platform") or ""
+    platform_id = _safe_get(row, "platform_id") or ""
+    is_auto_discovered = bool(_safe_get(row, "is_auto_discovered", 0))
     return Game(
         id=row["id"],
         name=row["name"],
         process_name=row["process_name"],
         executable_path=row["executable_path"],
-        icon_path=row["icon_path"] or "",
+        icon_path=_safe_get(row, "icon_path") or "",
         is_enabled=bool(row["is_enabled"]),
-        first_played=_parse_dt(row["first_played"]),
-        last_played=_parse_dt(row["last_played"]),
-        created_at=_parse_dt(row["created_at"]) or datetime.now(UTC).replace(tzinfo=None),
-        updated_at=_parse_dt(row["updated_at"]) or datetime.now(UTC).replace(tzinfo=None),
+        platform=str(platform) if platform is not None else "",
+        platform_id=str(platform_id) if platform_id is not None else "",
+        is_auto_discovered=is_auto_discovered,
+        first_played=_parse_dt(_safe_get(row, "first_played")),
+        last_played=_parse_dt(_safe_get(row, "last_played")),
+        created_at=_parse_dt(_safe_get(row, "created_at")) or datetime.now(UTC).replace(tzinfo=None),
+        updated_at=_parse_dt(_safe_get(row, "updated_at")) or datetime.now(UTC).replace(tzinfo=None),
     )
 
 
@@ -88,8 +106,9 @@ class GamesRepository:
             """
             INSERT INTO games
                 (name, process_name, executable_path, icon_path,
-                 is_enabled, first_played, last_played, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 is_enabled, platform, platform_id, is_auto_discovered,
+                 first_played, last_played, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 game.name,
@@ -97,6 +116,9 @@ class GamesRepository:
                 game.executable_path,
                 game.icon_path,
                 1 if game.is_enabled else 0,
+                game.platform if game.platform else None,
+                game.platform_id if game.platform_id else None,
+                1 if game.is_auto_discovered else 0,
                 _dt_str(game.first_played),
                 _dt_str(game.last_played),
                 _dt_str(game.created_at),
@@ -171,6 +193,25 @@ class GamesRepository:
         row = cursor.fetchone()
         return _row_to_game(row) if row else None
 
+    def get_by_platform_id(self, platform: str, platform_id: str) -> Game | None:
+        """Return the Game with the given platform + platform_id, or None."""
+        cursor = self._conn.cursor()
+        cursor.execute(
+            "SELECT * FROM games WHERE platform = ? AND platform_id = ? LIMIT 1;",
+            (platform, platform_id),
+        )
+        row = cursor.fetchone()
+        return _row_to_game(row) if row else None
+
+    def exists_by_platform_id(self, platform: str, platform_id: str) -> bool:
+        """Check whether a game with this platform + platform_id exists."""
+        cursor = self._conn.cursor()
+        cursor.execute(
+            "SELECT 1 FROM games WHERE platform = ? AND platform_id = ? LIMIT 1;",
+            (platform, platform_id),
+        )
+        return cursor.fetchone() is not None
+
     # ------------------------------------------------------------------
     # Update
     # ------------------------------------------------------------------
@@ -195,6 +236,9 @@ class GamesRepository:
                 executable_path  = ?,
                 icon_path        = ?,
                 is_enabled       = ?,
+                platform         = ?,
+                platform_id      = ?,
+                is_auto_discovered = ?,
                 first_played     = ?,
                 last_played      = ?,
                 updated_at       = ?
@@ -206,6 +250,9 @@ class GamesRepository:
                 game.executable_path,
                 game.icon_path,
                 1 if game.is_enabled else 0,
+                game.platform if game.platform else None,
+                game.platform_id if game.platform_id else None,
+                1 if game.is_auto_discovered else 0,
                 _dt_str(game.first_played),
                 _dt_str(game.last_played),
                 _dt_str(game.updated_at),

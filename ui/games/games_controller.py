@@ -20,7 +20,9 @@ from PyQt6.QtWidgets import QMessageBox, QWidget
 
 from database.models import Game
 from services.game_service import AddGameRequest, EditGameRequest, GameService
+from tracker.discovery.orchestrator import DiscoveryOrchestrator
 from ui.games.add_game_dialog import AddGameDialog
+from ui.games.discovery_dialog import DiscoveryDialog
 from ui.games.games_view import GamesView
 
 logger = logging.getLogger(__name__)
@@ -34,9 +36,15 @@ class GamesController:
         GamesView signals  →  GameService calls  →  GamesView refresh
     """
 
-    def __init__(self, view: GamesView, game_service: GameService) -> None:
+    def __init__(
+        self,
+        view: GamesView,
+        game_service: GameService,
+        discovery_orchestrator: Optional[DiscoveryOrchestrator] = None,
+    ) -> None:
         self._view = view
         self._service = game_service
+        self._orchestrator = discovery_orchestrator
         self._connect_signals()
         self.load_games()
 
@@ -55,6 +63,7 @@ class GamesController:
 
     def _connect_signals(self) -> None:
         self._view.add_requested.connect(self._on_add_requested)
+        self._view.scan_requested.connect(self._on_scan_requested)
         self._view.edit_requested.connect(self._on_edit_requested)
         self._view.delete_requested.connect(self._on_delete_requested)
         self._view.toggle_enabled_requested.connect(self._on_toggle_enabled)
@@ -80,6 +89,56 @@ class GamesController:
             self._view.show_info("Game Added", result.message)
         else:
             self._view.show_error("Add Game Failed", result.message)
+
+    def _on_scan_requested(self) -> None:
+        """Open Scan dialog and import selected games."""
+        logger.debug("Scan requested — orchestrator=%s", self._orchestrator)
+        if self._orchestrator is None:
+            self._view.show_error(
+                "Scan Unavailable",
+                "Game discovery service is not configured.",
+            )
+            return
+
+        try:
+            logger.debug("Creating DiscoveryDialog...")
+            dialog = DiscoveryDialog(
+                parent=self._view,
+                orchestrator=self._orchestrator,
+            )
+            logger.debug("DiscoveryDialog created, calling exec()...")
+            accepted = dialog.exec() == DiscoveryDialog.DialogCode.Accepted
+            logger.debug("DiscoveryDialog exec() returned: accepted=%s", accepted)
+            if not accepted:
+                return
+        except Exception as exc:
+            logger.exception("DiscoveryDialog failed: %s", exc)
+            self._view.show_error(
+                "Scan Failed",
+                f"An error occurred while scanning for games:\n\n{exc}",
+            )
+            return
+
+        try:
+            candidates = dialog.get_selected_candidates()
+            logger.debug("Candidates selected: %d", len(candidates))
+            if not candidates:
+                return
+
+            result = self._service.import_discovered_games(candidates)
+            logger.debug("Import result: success=%s, message=%s", result.success, result.message)
+            self.load_games()
+
+            if result.success:
+                self._view.show_info("Scan Complete", result.message)
+            else:
+                self._view.show_info("Scan Complete", result.message)
+        except Exception as exc:
+            logger.exception("Import failed: %s", exc)
+            self._view.show_error(
+                "Import Failed",
+                f"An error occurred while importing games:\n\n{exc}",
+            )
 
     def _on_edit_requested(self, game: Game) -> None:
         """Open Edit Game dialog pre-populated with existing data."""

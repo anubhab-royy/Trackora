@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 # Sessions shorter than this are likely noise from crashes at startup.
 MINIMUM_SESSION_DURATION_SECONDS: int = 1
 
+# Maximum session duration in seconds for recovered sessions.
+# Sessions longer than this are likely artifacts of a long gap between
+# crash and recovery (e.g. computer left on for days after Trackora crash).
+MAXIMUM_SESSION_DURATION_SECONDS: int = 86400  # 24 hours
+
 
 @dataclass
 class RecoveredSession:
@@ -201,6 +206,29 @@ class RecoveryManager:
                 discard_reason=(
                     f"Duration {duration_seconds}s below minimum "
                     f"{MINIMUM_SESSION_DURATION_SECONDS}s"
+                ),
+            )
+
+        # Discard sessions that are too long (likely recovery artifact)
+        if duration_seconds > MAXIMUM_SESSION_DURATION_SECONDS:
+            logger.warning(
+                "RecoveryManager: Discarding session id=%d — "
+                "duration %d second(s) exceeds maximum threshold of %d.",
+                active_session.id,
+                duration_seconds,
+                MAXIMUM_SESSION_DURATION_SECONDS,
+            )
+            self._safe_delete_active_session(active_session.id)
+            return RecoveredSession(
+                active_session_id=active_session.id,
+                game_id=active_session.game_id,
+                start_time=start_time,
+                duration_seconds=duration_seconds,
+                saved_session_id=None,
+                was_saved=False,
+                discard_reason=(
+                    f"Duration {duration_seconds}s exceeds maximum "
+                    f"{MAXIMUM_SESSION_DURATION_SECONDS}s"
                 ),
             )
 

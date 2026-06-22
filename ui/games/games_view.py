@@ -41,12 +41,14 @@ class GamesView(QWidget):
 
     Signals:
         add_requested         — user clicked Add Game
+        scan_requested        — user clicked Scan For Games
         edit_requested(Game)  — user clicked Edit on a selected game
         delete_requested(Game)— user clicked Delete on a selected game
         toggle_enabled_requested(Game) — user clicked Enable/Disable
     """
 
     add_requested = pyqtSignal()
+    scan_requested = pyqtSignal()
     edit_requested = pyqtSignal(object)          # Game
     delete_requested = pyqtSignal(object)         # Game
     toggle_enabled_requested = pyqtSignal(object) # Game
@@ -106,6 +108,18 @@ class GamesView(QWidget):
             "QPushButton:pressed { background-color: #005a9e; }"
         )
         header_layout.addWidget(self._add_btn)
+
+        # Scan For Games button
+        self._scan_btn = QPushButton("Scan For Games")
+        self._scan_btn.setFixedHeight(32)
+        self._scan_btn.setToolTip("Scan installed launchers for games")
+        self._scan_btn.setStyleSheet(
+            "QPushButton { background-color: #107c10; color: white; "
+            "border-radius: 4px; padding: 0 12px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #0b6a0b; }"
+            "QPushButton:pressed { background-color: #094509; }"
+        )
+        header_layout.addWidget(self._scan_btn)
 
         root_layout.addLayout(header_layout)
 
@@ -181,6 +195,7 @@ class GamesView(QWidget):
     def _connect_internal_signals(self) -> None:
         """Wire internal widget signals to view methods."""
         self._add_btn.clicked.connect(self.add_requested.emit)
+        self._scan_btn.clicked.connect(self.scan_requested.emit)
         self._edit_btn.clicked.connect(self._emit_edit)
         self._delete_btn.clicked.connect(self._emit_delete)
         self._toggle_btn.clicked.connect(self._emit_toggle)

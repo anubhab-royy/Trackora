@@ -14,6 +14,7 @@ from uuid import uuid4
 from models.support.bug_report import BugReport
 from models.support.feature_request import FeatureRequest
 from models.support.feedback_report import FeedbackReport
+from services.crash.diagnostic_service import CrashReport
 from services.support.reporting_interface import AbstractReportService
 from services.update_announcements_service import (
     AnnouncementsResult,
@@ -57,11 +58,17 @@ class SupportSubmitResult:
         return self.local_stored
 
 
-# Errors that should NOT be queued for retry (configuration issues).
+# Errors that should NOT be queued for retry (configuration / permanent issues).
 _NON_RETRYABLE_KEYWORDS = [
     "not configured",
-    "authentication failed",
+    "not available",
     "not found",
+    "authentication failed",
+    "permission denied",
+    "forbidden",
+    "invalid",
+    "bad request",
+    "unsupported",
     "check your",
 ]
 
@@ -279,11 +286,40 @@ class SupportService:
         }
 
     @staticmethod
+    def _serialize_crash_report(
+        title: str,
+        body: str,
+        crash_type: str,
+        app_version: str,
+        os_version: str,
+        os_platform: str,
+        active_sessions: list,
+        tracked_games: int,
+        was_tracking: bool,
+        stack_trace: str | None,
+        recent_log_entries: list[str],
+    ) -> dict[str, object]:
+        return {
+            "title": title,
+            "body": body,
+            "crash_type": crash_type,
+            "app_version": app_version,
+            "os_version": os_version,
+            "os_platform": os_platform,
+            "active_sessions": active_sessions,
+            "tracked_games": tracked_games,
+            "was_tracking": was_tracking,
+            "stack_trace": stack_trace,
+            "recent_log_entries": recent_log_entries,
+        }
+
+    @staticmethod
     def _report_type(github_method: str) -> str:
         mapping = {
             "submit_bug": "bug",
             "submit_feature": "feature",
             "submit_feedback": "feedback",
+            "submit_crash": "crash",
         }
         return mapping.get(github_method, "unknown")
 
@@ -375,18 +411,20 @@ _REPORT_TYPE_CLS_MAP: dict[str, type] = {
     "bug": BugReport,
     "feature": FeatureRequest,
     "feedback": FeedbackReport,
+    "crash": CrashReport,
 }
 
 _GITHUB_METHOD_MAP: dict[str, str] = {
     "bug": "submit_bug",
     "feature": "submit_feature",
     "feedback": "submit_feedback",
+    "crash": "submit_crash",
 }
 
 
 def _reconstruct_model(
     report_type: str, data: dict
-) -> BugReport | FeatureRequest | FeedbackReport | None:
+) -> BugReport | FeatureRequest | FeedbackReport | CrashReport | None:
     """Reconstruct a domain model from queued JSON data."""
     cls = _REPORT_TYPE_CLS_MAP.get(report_type)
     if cls is None:

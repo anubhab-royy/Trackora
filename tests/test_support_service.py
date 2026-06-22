@@ -9,6 +9,9 @@ from services.support.support_service import (
     SupportService,
     SupportSubmitResult,
     UpcomingUpdate,
+    _GITHUB_METHOD_MAP,
+    _REPORT_TYPE_CLS_MAP,
+    _reconstruct_model,
 )
 from services.update_announcements_service import (
     AnnouncementsResult,
@@ -333,3 +336,99 @@ class TestSupportServiceWithQueue:
     def test_process_queue_returns_none_without_queue_service(self):
         svc = SupportService()
         assert svc.process_queue() is None
+
+
+class TestCrashSupport:
+    def test_serialize_crash_report(self):
+        data = SupportService._serialize_crash_report(
+            title="Crash",
+            body="Stack trace...",
+            crash_type="unhandled_exception",
+            app_version="1.0.0",
+            os_version="Linux-6.0",
+            os_platform="Linux",
+            active_sessions=[],
+            tracked_games=0,
+            was_tracking=False,
+            stack_trace="Traceback...",
+            recent_log_entries=["log line 1", "log line 2"],
+        )
+        assert data["title"] == "Crash"
+        assert data["body"] == "Stack trace..."
+        assert data["crash_type"] == "unhandled_exception"
+        assert data["app_version"] == "1.0.0"
+        assert data["os_version"] == "Linux-6.0"
+        assert data["os_platform"] == "Linux"
+        assert data["active_sessions"] == []
+        assert data["tracked_games"] == 0
+        assert data["was_tracking"] is False
+        assert data["stack_trace"] == "Traceback..."
+        assert data["recent_log_entries"] == ["log line 1", "log line 2"]
+
+    def test_report_type_returns_crash_for_submit_crash(self):
+        from services.support.support_service import SupportService
+        result = SupportService._report_type("submit_crash")
+        assert result == "crash"
+
+    def test_report_type_unchanged_for_other_methods(self):
+        from services.support.support_service import SupportService
+        assert SupportService._report_type("submit_bug") == "bug"
+        assert SupportService._report_type("submit_feature") == "feature"
+        assert SupportService._report_type("submit_feedback") == "feedback"
+
+    def test_report_type_map_has_crash(self):
+        from services.support.support_service import _REPORT_TYPE_CLS_MAP
+        assert "crash" in _REPORT_TYPE_CLS_MAP
+        from services.crash.diagnostic_service import CrashReport
+        assert _REPORT_TYPE_CLS_MAP["crash"] is CrashReport
+
+    def test_github_method_map_has_crash(self):
+        from services.support.support_service import _GITHUB_METHOD_MAP
+        assert "crash" in _GITHUB_METHOD_MAP
+        assert _GITHUB_METHOD_MAP["crash"] == "submit_crash"
+
+    def test_reconstruct_model_returns_crash_report(self):
+        data = {
+            "report_id": "test-uuid",
+            "timestamp": "2024-01-01T00:00:00",
+            "app_version": "1.0.0",
+            "os_version": "Linux-6.0",
+            "os_platform": "Linux",
+            "active_sessions": [],
+            "tracked_games": 0,
+            "stack_trace": None,
+            "recent_log_entries": [],
+            "crash_type": "unhandled_exception",
+            "was_tracking": False,
+        }
+        from services.crash.diagnostic_service import CrashReport
+        model = _reconstruct_model("crash", data)
+        assert isinstance(model, CrashReport)
+        assert model.report_id == "test-uuid"
+
+    def test_process_queue_handles_crash_entries(self, tmp_path):
+        mock_github = MagicMock()
+        mock_github.submit_crash.return_value = MagicMock(
+            success=True, report_id="abc"
+        )
+        from services.support.report_queue_service import ReportQueueService
+        queue = ReportQueueService(storage_dir=tmp_path / "queue")
+        crash_data = {
+            "report_id": "test-uuid",
+            "timestamp": "2024-01-01T00:00:00",
+            "app_version": "1.0.0",
+            "os_version": "Linux-6.0",
+            "os_platform": "Linux",
+            "active_sessions": [],
+            "tracked_games": 0,
+            "stack_trace": None,
+            "recent_log_entries": [],
+            "crash_type": "unhandled_exception",
+            "was_tracking": False,
+        }
+        queue.save_report("crash", crash_data)
+        svc = SupportService(github_service=mock_github, queue_service=queue)
+        result = svc.process_queue()
+        assert result.attempted == 1
+        assert result.succeeded == 1
+        mock_github.submit_crash.assert_called_once()

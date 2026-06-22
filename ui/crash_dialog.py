@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
 
 from services.crash.diagnostic_service import CrashReport, DiagnosticService
 from services.support.reporting_interface import AbstractReportService, ReportType
+from services.support.report_queue_service import ReportQueueService
 
 logger = logging.getLogger(__name__)
 
@@ -47,12 +48,14 @@ class CrashDialog(QDialog):
         report: CrashReport,
         report_path: Path,
         github_service: AbstractReportService | None = None,
+        queue_service: ReportQueueService | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._report = report
         self._report_path = report_path
         self._github_service = github_service
+        self._queue_service = queue_service
         self._issue_url: str | None = None
         self._action_taken: str | None = None
 
@@ -157,6 +160,11 @@ class CrashDialog(QDialog):
                     f'<a href="{result.issue_url}">{result.issue_url}</a>'
                 )
                 self._delete_report_file()
+            elif self._is_retryable(result.error_message) and self._queue_service is not None:
+                self._queue_crash_report()
+                self._status_label.setText(
+                    "Report saved locally and will be sent automatically."
+                )
             else:
                 self._status_label.setText(
                     f"Failed to submit: {result.error_message}"
@@ -183,6 +191,40 @@ class CrashDialog(QDialog):
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
+
+    def _queue_crash_report(self) -> None:
+        data = self._build_queue_data()
+        try:
+            self._queue_service.save_report("crash", data)
+            logger.info("Crash report queued for retry: %s", self._report.report_id)
+        except Exception as exc:
+            logger.exception("Failed to queue crash report: %s", exc)
+
+    def _build_queue_data(self) -> dict:
+        return {
+            "report_id": self._report.report_id,
+            "timestamp": self._report.timestamp,
+            "app_version": self._report.app_version,
+            "os_version": self._report.os_version,
+            "os_platform": self._report.os_platform,
+            "active_sessions": self._report.active_sessions,
+            "tracked_games": self._report.tracked_games,
+            "stack_trace": self._report.stack_trace,
+            "recent_log_entries": self._report.recent_log_entries,
+            "crash_type": self._report.crash_type,
+            "was_tracking": self._report.was_tracking,
+            "title": f"Trackora Crash — {self._report.crash_type} ({self._report.timestamp})",
+            "body": self._build_issue_body(self._report),
+        }
+
+    @staticmethod
+    def _is_retryable(error_message: str | None) -> bool:
+        if error_message is None:
+            return False
+        lower = error_message.lower()
+        return not any(kw in lower for kw in [
+            "not configured", "authentication failed", "not found", "check your",
+        ])
 
     def _delete_report_file(self) -> None:
         try:
