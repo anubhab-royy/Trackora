@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 
 from tracker.discovery.detector import GameDetector
 from tracker.discovery.detectors.battlenet_detector import BattleNetDetector
@@ -57,11 +58,16 @@ class DiscoveryOrchestrator:
         self._exists_by_executable_path = exists_by_executable_path
         self._exists_by_platform_id = exists_by_platform_id
 
-    def scan_all(self, folder_paths: list[str] | None = None) -> DiscoveryResult:
+    def scan_all(
+        self,
+        folder_paths: list[str] | None = None,
+        progress_callback: Callable[[str], None] | None = None,
+    ) -> DiscoveryResult:
         """Run all detectors and return aggregated, deduplicated results.
 
         Args:
             folder_paths: Directories for FolderDetector to scan.
+            progress_callback: Optional callable receiving status messages.
 
         Returns:
             DiscoveryResult with candidates, errors, and timing.
@@ -71,15 +77,19 @@ class DiscoveryOrchestrator:
         errors: list[str] = []
 
         for detector in self._detectors:
+            platform = detector.platform
+            if progress_callback:
+                progress_callback(f"Scanning {platform}...")
             try:
                 if isinstance(detector, FolderDetector):
                     results = detector.detect(folder_paths)
                 else:
                     results = detector.detect()
                 all_candidates.extend(results)
+                logger.debug("Detector %s found %d game(s)", platform, len(results))
             except Exception as exc:
-                msg = f"{detector.platform}: {exc}"
-                logger.exception("Detector %s failed", detector.platform)
+                msg = f"{platform}: {exc}"
+                logger.exception("Detector %s failed", platform)
                 errors.append(msg)
 
         # Deduplicate
@@ -110,10 +120,17 @@ class DiscoveryOrchestrator:
 
     @staticmethod
     def _deduplicate(candidates: list[CandidateGame]) -> list[CandidateGame]:
-        """Remove duplicates keeping the highest-priority detector result."""
+        """Remove duplicates keeping the highest-priority detector result.
+
+        Deduplicates by both executable path and (platform, platform_id) pair
+        to handle:
+          - Same game from two detectors with the same executable path
+          - Same game from the same launcher in different library paths
+        """
         best: dict[str, CandidateGame] = {}
         for c in candidates:
-            key = c.executable_path
+            # Use executable_path as primary key, fallback to platform+id
+            key = c.executable_path or f"{c.platform}:{c.platform_id}"
             if key in best:
                 existing = best[key]
                 existing_priority = _DETECTOR_PRIORITY.get(existing.platform, 99)
@@ -122,25 +139,46 @@ class DiscoveryOrchestrator:
                     best[key] = c
             else:
                 best[key] = c
-        # Return results ordered by detector priority (highest priority first)
-        def sort_key(item: tuple[str, CandidateGame]) -> int:
-            return _DETECTOR_PRIORITY.get(item[1].platform, 99)
-        return [c for _, c in sorted(best.items(), key=sort_key)]
+
+        # Also deduplicate by (platform, platform_id) across different executable paths
+        seen_ids: dict[tuple[str, str], int] = {}  # (platform, platform_id) -> position
+        deduped: list[CandidateGame] = []
+        for c in sorted(best.values(), key=lambda x: _DETECTOR_PRIORITY.get(x.platform, 99)):
+            id_key = (c.platform, c.platform_id)
+            if id_key in seen_ids:
+                continue
+            if c.platform and c.platform_id:
+                seen_ids[id_key] = len(deduped)
+            deduped.append(c)
+
+        # Return results ordered by detector priority
+        return sorted(deduped, key=lambda c: _DETECTOR_PRIORITY.get(c.platform, 99))
 
     def _exclude_existing(self, candidates: list[CandidateGame]) -> list[CandidateGame]:
-        """Remove candidates that are already tracked in the database."""
+        """Remove candidates that are already tracked in the database.
+
+        Database errors (missing columns, connection issues) are logged
+        and treated as "not yet tracked" so the scan can continue.
+        """
         if not self._exists_by_executable_path and not self._exists_by_platform_id:
             return candidates
 
         filtered: list[CandidateGame] = []
         for c in candidates:
-            # Check by platform_id first
-            if self._exists_by_platform_id and c.platform and c.platform_id:
-                if self._exists_by_platform_id(c.platform, c.platform_id):
-                    continue
-            # Check by executable_path
-            if self._exists_by_executable_path and c.executable_path:
-                if self._exists_by_executable_path(c.executable_path):
-                    continue
-            filtered.append(c)
+            try:
+                # Check by platform_id first
+                if self._exists_by_platform_id and c.platform and c.platform_id:
+                    if self._exists_by_platform_id(c.platform, c.platform_id):
+                        continue
+                # Check by executable_path
+                if self._exists_by_executable_path and c.executable_path:
+                    if self._exists_by_executable_path(c.executable_path):
+                        continue
+                filtered.append(c)
+            except Exception as exc:
+                logger.warning(
+                    "Error checking existence for candidate %r (%s): %s",
+                    c.name, c.platform, exc,
+                )
+                filtered.append(c)
         return filtered

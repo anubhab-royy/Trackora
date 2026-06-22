@@ -92,6 +92,7 @@ class GamesController:
 
     def _on_scan_requested(self) -> None:
         """Open Scan dialog and import selected games."""
+        logger.debug("Scan requested — orchestrator=%s", self._orchestrator)
         if self._orchestrator is None:
             self._view.show_error(
                 "Scan Unavailable",
@@ -99,24 +100,45 @@ class GamesController:
             )
             return
 
-        dialog = DiscoveryDialog(
-            parent=self._view,
-            orchestrator=self._orchestrator,
-        )
-        if dialog.exec() != DiscoveryDialog.DialogCode.Accepted:
+        try:
+            logger.debug("Creating DiscoveryDialog...")
+            dialog = DiscoveryDialog(
+                parent=self._view,
+                orchestrator=self._orchestrator,
+            )
+            logger.debug("DiscoveryDialog created, calling exec()...")
+            accepted = dialog.exec() == DiscoveryDialog.DialogCode.Accepted
+            logger.debug("DiscoveryDialog exec() returned: accepted=%s", accepted)
+            if not accepted:
+                return
+        except Exception as exc:
+            logger.exception("DiscoveryDialog failed: %s", exc)
+            self._view.show_error(
+                "Scan Failed",
+                f"An error occurred while scanning for games:\n\n{exc}",
+            )
             return
 
-        candidates = dialog.get_selected_candidates()
-        if not candidates:
-            return
+        try:
+            candidates = dialog.get_selected_candidates()
+            logger.debug("Candidates selected: %d", len(candidates))
+            if not candidates:
+                return
 
-        result = self._service.import_discovered_games(candidates)
-        self.load_games()
+            result = self._service.import_discovered_games(candidates)
+            logger.debug("Import result: success=%s, message=%s", result.success, result.message)
+            self.load_games()
 
-        if result.success:
-            self._view.show_info("Scan Complete", result.message)
-        else:
-            self._view.show_info("Scan Complete", result.message)
+            if result.success:
+                self._view.show_info("Scan Complete", result.message)
+            else:
+                self._view.show_info("Scan Complete", result.message)
+        except Exception as exc:
+            logger.exception("Import failed: %s", exc)
+            self._view.show_error(
+                "Import Failed",
+                f"An error occurred while importing games:\n\n{exc}",
+            )
 
     def _on_edit_requested(self, game: Game) -> None:
         """Open Edit Game dialog pre-populated with existing data."""

@@ -76,13 +76,11 @@ class TestFolderDetector:
         assert results == []
 
     def test_excludes_system_dirs(self, tmp_path: Path) -> None:
-        """Only system directories are excluded."""
-        detector = FolderDetector(min_size_bytes=1)
-        results = detector.detect(["/bin", "/usr/bin", "C:\\Windows", str(tmp_path)])
-        # Only the tmp_path results should appear
+        """System directories are excluded from results."""
         exe = tmp_path / "game.exe"
         exe.write_text("x" * 2_000_000)
-        results = detector.detect([str(tmp_path)])
+        detector = FolderDetector(min_size_bytes=1)
+        results = detector.detect(["/nonexistent/bin", "/nonexistent/usr/bin", str(tmp_path)])
         assert len(results) == 1
 
     def test_deduplicates_by_path(self, tmp_path: Path) -> None:
@@ -93,3 +91,22 @@ class TestFolderDetector:
         detector = FolderDetector(min_size_bytes=1)
         results = detector.detect([str(tmp_path), str(tmp_path)])
         assert len(results) == 1
+
+    def test_depth_limit(self, tmp_path: Path) -> None:
+        """Respect max_depth parameter and stop at that depth."""
+        # depth=2: tmp/a/b/deep.exe  (should NOT be found at max_depth=1)
+        deep_dir = tmp_path / "a" / "b"
+        deep_dir.mkdir(parents=True)
+        (deep_dir / "deep.exe").write_text("x" * 2_000_000)
+
+        # depth=1: tmp/c/shallow.exe  (SHOULD be found at max_depth=1)
+        shallow_dir = tmp_path / "c"
+        shallow_dir.mkdir()
+        shallow_exe = shallow_dir / "shallow.exe"
+        shallow_exe.write_text("x" * 2_000_000)
+
+        # max_depth=1: only files in root and direct subdirectories
+        detector = FolderDetector(min_size_bytes=1, max_depth=1)
+        results = detector.detect([str(tmp_path)])
+        assert len(results) == 1
+        assert results[0].name == "Shallow"

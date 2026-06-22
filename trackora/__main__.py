@@ -56,10 +56,50 @@ from tracker import (
 from ui.main_window import MainWindow
 from ui.themes.theme_manager import ThemeManager
 
+logger = logging.getLogger(__name__)
+
+_EXPECTED_GAME_COLUMNS: frozenset[str] = frozenset({
+    "platform", "platform_id", "is_auto_discovered",
+})
+
+
+def _ensure_schema_columns(conn: object) -> None:
+    """Add missing columns to the games table if schema.json was written
+    without running actual migrations (e.g. a frozen build that couldn't
+    discover migration modules via ``pkgutil.iter_modules``).
+
+    Idempotent and safe to call on every startup when schema version matches.
+    """
+    import sqlite3
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute("PRAGMA table_info(games)")
+    except sqlite3.OperationalError:
+        return  # games table doesn't exist yet — nothing to fix
+    existing = {row[1] for row in cursor.fetchall()}
+    missing = _EXPECTED_GAME_COLUMNS - existing
+    if not missing:
+        return
+
+    logger.warning("Games table missing columns: %s — adding them now", missing)
+    for col in sorted(missing):
+        if col == "platform":
+            conn.execute("ALTER TABLE games ADD COLUMN platform TEXT DEFAULT NULL;")
+        elif col == "platform_id":
+            conn.execute("ALTER TABLE games ADD COLUMN platform_id TEXT DEFAULT NULL;")
+        elif col == "is_auto_discovered":
+            conn.execute("ALTER TABLE games ADD COLUMN is_auto_discovered INTEGER DEFAULT 0;")
+    try:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_games_platform ON games (platform);")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+    logger.info("Added missing columns: %s", missing)
+
 
 def main() -> None:
     LoggingService.setup()
-    logger = logging.getLogger(__name__)
 
     load_env_file()
 
@@ -121,6 +161,9 @@ def main() -> None:
     if compat.status == "first_run":
         schema_version_manager.write(app_version)
         logger.info("First run — schema version set to %s", app_version)
+
+    elif compat.status == "ok":
+        _ensure_schema_columns(conn)
 
     elif compat.status == "needs_migration":
         logger.info("Pre-migration backup started")

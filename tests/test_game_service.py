@@ -604,6 +604,219 @@ class TestExtractProcessName:
         assert GameService._extract_process_name("game.exe") == "game.exe"
 
 
+# ===========================================================================
+# Game Consolidation — Normalized Name Matching
+# ===========================================================================
+
+class TestNormalizeName:
+
+    def test_strips_trademark_symbol(self) -> None:
+        assert GameService._normalize_name("eFootball™") == "efootball"
+
+    def test_strips_registered_symbol(self) -> None:
+        assert GameService._normalize_name("Cyberpunk®") == "cyberpunk"
+
+    def test_strips_copyright_symbol(self) -> None:
+        assert GameService._normalize_name("Hades©") == "hades"
+
+    def test_lowercases(self) -> None:
+        assert GameService._normalize_name("VALORANT") == "valorant"
+
+    def test_strips_whitespace(self) -> None:
+        assert GameService._normalize_name("  CS2  ") == "cs2"
+
+    def test_combined_trademark_and_case(self) -> None:
+        assert GameService._normalize_name("eFootball™ 2024") == "efootball 2024"
+
+
+class TestFindLegacyByNormalizedName:
+
+    def test_matches_legacy_game(self) -> None:
+        legacy = _make_game(1, "eFootball")
+        already = _make_game(10, "eFootball™", platform="steam")
+        result = GameService._find_legacy_by_normalized_name(
+            GameService, "eFootball™", [legacy, already]
+        )
+        assert result is legacy  # legacy returned (not the discovered record)
+
+    def test_returns_none_when_no_match(self) -> None:
+        games = [_make_game(1, "eFootball")]
+        result = GameService._find_legacy_by_normalized_name(
+            GameService, "CS2", games
+        )
+        assert result is None
+
+    def test_skips_already_discovered_platform_games(self) -> None:
+        """Discovered games (with platform) should NOT match as 'legacy'."""
+        discovered = _make_game(10, "eFootball™", platform="steam")
+        result = GameService._find_legacy_by_normalized_name(
+            GameService, "eFootball™", [discovered]
+        )
+        assert result is None
+
+    def test_trademark_insensitive_match(self) -> None:
+        legacy = _make_game(1, "eFootball")
+        result = GameService._find_legacy_by_normalized_name(
+            GameService, "eFootball™", [legacy]
+        )
+        assert result is legacy
+
+    def test_case_insensitive_match(self) -> None:
+        legacy = _make_game(1, "Efootball")
+        result = GameService._find_legacy_by_normalized_name(
+            GameService, "eFootball™", [legacy]
+        )
+        assert result is legacy
+
+    def test_returns_none_when_legacy_has_platform(self) -> None:
+        """A game with platform is not a legacy game."""
+        discovered = _make_game(10, "eFootball™", platform="steam")
+        result = GameService._find_legacy_by_normalized_name(
+            GameService, "eFootball™", [discovered]
+        )
+        assert result is None
+
+
+class TestImportDiscoveredGamesConsolidation:
+
+    def test_updates_legacy_by_normalized_name(
+        self, service: GameService, mock_repo: MagicMock
+    ) -> None:
+        """Legacy game with matching normalized name is updated, not duplicated."""
+        legacy_game = _make_game(1, "eFootball", platform="")
+        mock_repo.get_all.return_value = [legacy_game]
+        mock_repo.add.side_effect = lambda g: g
+
+        candidates = [
+            _make_candidate("eFootball™", "/game.exe", "steam", "1665460"),
+        ]
+
+        with _file_exists(True):
+            result = service.import_discovered_games(candidates)
+
+        assert result.success is True
+        assert "updated" in result.message
+        assert mock_repo.add.call_count == 0  # not imported as new
+        mock_repo.update.assert_called_once()
+        updated: Game = mock_repo.update.call_args[0][0]
+        assert updated.platform == "steam"
+        assert updated.platform_id == "1665460"
+        assert updated.is_auto_discovered is True
+
+    def test_skips_when_platform_id_already_exists(
+        self, service: GameService, mock_repo: MagicMock
+    ) -> None:
+        """Candidate with existing (platform, platform_id) is skipped."""
+        existing = _make_game(10, "eFootball™", platform="steam", platform_id="1665460")
+        mock_repo.get_all.return_value = [existing]
+        mock_repo.get_by_platform_id.return_value = existing
+        mock_repo.add.side_effect = lambda g: g
+
+        candidates = [
+            _make_candidate("eFootball™", "/different.exe", "steam", "1665460"),
+        ]
+
+        with _file_exists(True):
+            result = service.import_discovered_games(candidates)
+
+        # All candidates were skipped — result is failure with no-import message
+        assert result.success is False
+        assert "No games were imported" in result.message
+        assert mock_repo.add.call_count == 0
+        mock_repo.update.assert_not_called()
+
+    def test_skips_when_executable_path_exists(
+        self, service: GameService, mock_repo: MagicMock
+    ) -> None:
+        """Candidate matching an existing executable_path is skipped."""
+        existing = _make_game(10, "eFootball™", executable_path="/same.exe")
+        mock_repo.get_all.return_value = [existing]
+        mock_repo.get_by_executable_path.return_value = existing
+        mock_repo.add.side_effect = lambda g: g
+
+        candidates = [
+            _make_candidate("eFootball™", "/same.exe", "steam", "1665460"),
+        ]
+
+        with _file_exists(True):
+            result = service.import_discovered_games(candidates)
+
+        # All candidates were skipped — result is failure with no-import message
+        assert result.success is False
+        assert "No games were imported" in result.message
+        assert mock_repo.add.call_count == 0
+        mock_repo.update.assert_not_called()
+
+    def test_falls_through_to_import_when_no_match(
+        self, service: GameService, mock_repo: MagicMock
+    ) -> None:
+        """Candidate with no legacy/duplicate match is imported as new."""
+        mock_repo.add.side_effect = lambda g: g
+
+        candidates = [
+            _make_candidate("New Game", "/new.exe", "steam", "99999"),
+        ]
+
+        with _file_exists(True):
+            result = service.import_discovered_games(candidates)
+
+        assert result.success is True
+        assert "imported" in result.message
+        mock_repo.add.assert_called_once()
+
+    def test_updates_legacy_preserving_existing_session_data(
+        self, service: GameService, mock_repo: MagicMock
+    ) -> None:
+        """Updating a legacy game does not lose its session data."""
+        legacy_game = _make_game(1, "eFootball", platform="")
+        legacy_game.first_played = datetime(2026, 6, 10)
+        mock_repo.get_all.return_value = [legacy_game]
+        mock_repo.add.side_effect = lambda g: g
+
+        candidates = [
+            _make_candidate("eFootball™", "/game.exe", "steam", "1665460"),
+        ]
+
+        with _file_exists(True):
+            result = service.import_discovered_games(candidates)
+
+        assert result.success is True
+        mock_repo.update.assert_called_once()
+        updated: Game = mock_repo.update.call_args[0][0]
+        assert updated.id == 1  # legacy ID preserved
+        assert updated.name == "eFootball"  # name unchanged
+        assert updated.first_played == datetime(2026, 6, 10)  # data preserved
+
+    def test_mixed_imports_new_skips_dupes_and_updates_legacy(
+        self, service: GameService, mock_repo: MagicMock
+    ) -> None:
+        """Correctly handles mix of new, dupe-by-exe, dupe-by-platform, and legacy-update."""
+        legacy_game = _make_game(1, "eFootball", platform="")
+        existing_exe_game = _make_game(2, "Existing", executable_path="/exe.exe")
+        existing_plat_game = _make_game(3, "Plat Game", platform="epic", platform_id="123")
+        mock_repo.get_all.return_value = [legacy_game, existing_exe_game, existing_plat_game]
+        mock_repo.get_by_executable_path.side_effect = lambda p: existing_exe_game if p == "/exe.exe" else None
+        mock_repo.get_by_platform_id.side_effect = lambda plat, pid: existing_plat_game if (plat, pid) == ("epic", "123") else None
+        mock_repo.add.side_effect = lambda g: g
+
+        candidates = [
+            _make_candidate("Brand New", "/new.exe", "steam", "1"),
+            _make_candidate("ExistingExe", "/exe.exe", "steam", "2"),  # dup by exe
+            _make_candidate("Plat Game", "/plat.exe", "epic", "123"),  # dup by platform
+            _make_candidate("eFootball™", "/efoot.exe", "steam", "1665460"),  # legacy update
+        ]
+
+        with _file_exists(True):
+            result = service.import_discovered_games(candidates)
+
+        assert result.success is True
+        assert "imported" in result.message
+        assert "updated" in result.message
+        assert "skipped" in result.message
+        assert mock_repo.add.call_count == 1  # only "Brand New" was added
+        mock_repo.update.assert_called_once()  # legacy updated once
+
+
 # ---------------------------------------------------------------------------
 # Helpers for discovery tests
 # ---------------------------------------------------------------------------

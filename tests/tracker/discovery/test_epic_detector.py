@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -77,9 +78,17 @@ class TestEpicDetector:
         exe = install_loc / "FortniteClient-Win64-Shipping.exe"
         exe.write_text("fake")
 
-        (manifest_dir / "LauncherInstalled.dat").write_text(
-            f'{{"InstallationList": [{{"AppName": "Fortnite", "DisplayName": "Fortnite", "InstallLocation": "{install_loc}"}}]}}'
-        )
+        import json
+        manifest_data = {
+            "InstallationList": [
+                {
+                    "AppName": "Fortnite",
+                    "DisplayName": "Fortnite",
+                    "InstallLocation": str(install_loc),
+                }
+            ]
+        }
+        (manifest_dir / "LauncherInstalled.dat").write_text(json.dumps(manifest_data))
 
         with patch.object(EpicDetector, "_find_manifest_dir", return_value=str(manifest_dir)):
             detector = EpicDetector()
@@ -87,3 +96,51 @@ class TestEpicDetector:
 
         assert len(results) == 1
         assert results[0].executable_path == str(exe)
+
+    def test_find_manifest_dir_unreal(self, tmp_path: Path) -> None:
+        """_find_manifest_dir returns UnrealEngineLauncher when LauncherInstalled.dat exists there."""
+        # Create temp layout: only UnrealEngineLauncher has the manifest file
+        unreal_dir = tmp_path / "ProgramData" / "Epic" / "UnrealEngineLauncher"
+        unreal_dir.mkdir(parents=True)
+        (unreal_dir / "LauncherInstalled.dat").write_text("{}")
+        # Modern dir exists but has no manifest
+        modern_dir = tmp_path / "ProgramData" / "Epic" / "EpicGamesLauncher" / "Data"
+        modern_dir.mkdir(parents=True)
+
+        with patch("tracker.discovery.detectors.epic_detector.os.name", "nt"):
+            with patch.dict(os.environ, {"PROGRAMDATA": str(tmp_path / "ProgramData")}, clear=True):
+                result = EpicDetector._find_manifest_dir()
+        assert result is not None
+        assert "UnrealEngineLauncher" in result
+
+    def test_find_manifest_dir_epic_games(self, tmp_path: Path) -> None:
+        """_find_manifest_dir finds EpicGamesLauncher/Data when LauncherInstalled.dat exists there."""
+        # Only the modern EpicGamesLauncher path has the manifest
+        modern_dir = tmp_path / "ProgramData" / "Epic" / "EpicGamesLauncher" / "Data"
+        modern_dir.mkdir(parents=True)
+        (modern_dir / "LauncherInstalled.dat").write_text("{}")
+        # Legacy dir also exists but no manifest
+        legacy_dir = tmp_path / "ProgramData" / "Epic" / "UnrealEngineLauncher"
+        legacy_dir.mkdir(parents=True)
+
+        with patch("tracker.discovery.detectors.epic_detector.os.name", "nt"):
+            with patch.dict(os.environ, {"PROGRAMDATA": str(tmp_path / "ProgramData")}, clear=True):
+                result = EpicDetector._find_manifest_dir()
+        assert result is not None
+        assert "EpicGamesLauncher" in result
+
+    def test_detect_with_epic_games_launcher(self, tmp_path: Path) -> None:
+        """Detect games using the modern EpicGamesLauncher path."""
+        manifest_dir = tmp_path / "Epic" / "EpicGamesLauncher" / "Data"
+        manifest_dir.mkdir(parents=True)
+        (manifest_dir / "LauncherInstalled.dat").write_text(
+            '{"InstallationList": [{"AppName": "TestApp", "DisplayName": "Test Game", "InstallLocation": ""}]}'
+        )
+
+        with patch.object(EpicDetector, "_find_manifest_dir", return_value=str(manifest_dir)):
+            detector = EpicDetector()
+            results = detector.detect()
+
+        assert len(results) == 1
+        assert results[0].name == "Test Game"
+        assert results[0].platform_id == "TestApp"

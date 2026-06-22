@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from tracker.discovery.detectors.ea_detector import EADetector
 
@@ -23,12 +23,11 @@ class TestEADetector:
         record_path.write_text(json.dumps(record))
         return record_path
 
-    def test_detect_games(self, tmp_path: Path) -> None:
+    def test_detect_games_from_files(self, tmp_path: Path) -> None:
         """Parse EA install records and return candidates."""
         records_dir = tmp_path / "EA" / "install-record"
         records_dir.mkdir(parents=True)
 
-        # Create game install dirs
         bf_dir = tmp_path / "BF2042"
         bf_dir.mkdir()
         (bf_dir / "BF2042.exe").write_text("fake")
@@ -67,3 +66,48 @@ class TestEADetector:
             detector = EADetector()
             results = detector.detect()
         assert results == []
+
+    def test_detect_from_registry_fallback(self, tmp_path: Path) -> None:
+        """Fall back to registry detection when no install records."""
+        records_dir = tmp_path / "empty"
+        records_dir.mkdir()
+
+        mock_key = MagicMock()
+        mock_game_key = MagicMock()
+        mock_game_key.name = "Battlefield 2042"
+
+        def enum_key_side_effect(key, index):
+            names = ["Battlefield 2042", "The Sims 4"]
+            if index >= len(names):
+                raise OSError
+            return names[index]
+
+        def query_value_side_effect(key, value_name):
+            paths = {
+                "Battlefield 2042": str(tmp_path / "BF2042"),
+                "The Sims 4": str(tmp_path / "Sims4"),
+            }
+            return (paths[key.name], 1)
+
+        with patch.object(EADetector, "_find_install_records_dir", return_value=records_dir):
+            with patch("tracker.discovery.detectors.ea_detector.winreg") as mock_winreg:
+                mock_winreg.HKEY_LOCAL_MACHINE = "HKLM"
+                mock_winreg.OpenKey = MagicMock(return_value=mock_key)
+                mock_winreg.EnumKey = MagicMock(side_effect=enum_key_side_effect)
+
+                mock_winreg.OpenKey.side_effect = lambda parent, name: (
+                    setattr(mock_game_key, "name", name) or mock_game_key
+                )
+
+                mock_winreg.QueryValueEx = MagicMock(side_effect=query_value_side_effect)
+                mock_winreg.CloseKey = MagicMock()
+
+                detector = EADetector()
+                results = detector.detect()
+
+        assert len(results) == 2
+        names = {r.name for r in results}
+        assert "Battlefield 2042" in names
+        assert "The Sims 4" in names
+        for r in results:
+            assert r.platform == "ea"

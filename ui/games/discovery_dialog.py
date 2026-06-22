@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -57,7 +57,9 @@ class DiscoveryDialog(QDialog):
         self._checkboxes: list[QCheckBox] = []
 
         self._setup_ui()
-        self._run_scan()
+        self._heading.setText("Scanning for games...")
+        self._status_label.setText("Initialising detectors...")
+        QTimer.singleShot(0, self._run_scan)
 
     # ------------------------------------------------------------------
     # Public API
@@ -122,6 +124,8 @@ class DiscoveryDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         self._button_box.button(QDialogButtonBox.StandardButton.Ok).setText("Import Selected")
+        self._ok_button = self._button_box.button(QDialogButtonBox.StandardButton.Ok)
+        self._cancel_button = self._button_box.button(QDialogButtonBox.StandardButton.Cancel)
         self._button_box.accepted.connect(self.accept)
         self._button_box.rejected.connect(self.reject)
         layout.addWidget(self._button_box)
@@ -132,69 +136,96 @@ class DiscoveryDialog(QDialog):
 
     def _run_scan(self) -> None:
         """Run the discovery scan and populate results."""
+        logger.debug("_run_scan started — orchestrator=%s", self._orchestrator)
         if self._orchestrator is None:
             self._heading.setText("Scanner not available")
             self._status_label.setText("Discovery service is not configured.")
-            self._button_box.setEnabled(False)
+            self._ok_button.setEnabled(False)
+            self._cancel_button.setEnabled(True)
             return
 
         self._heading.setText("Scanning for games...")
         self._status_label.setText("Checking launchers...")
         self._table.setRowCount(0)
 
-        result = self._orchestrator.scan_all(self._folder_paths)
+        try:
+            logger.debug("Calling scan_all(folder_paths=%s)...", self._folder_paths)
+            result = self._orchestrator.scan_all(
+                self._folder_paths,
+                progress_callback=lambda msg: self._status_label.setText(msg),
+            )
+            logger.debug(
+                "scan_all returned %d candidates, %d error(s), %dms",
+                len(result.candidates),
+                len(result.errors),
+                result.duration_ms,
+            )
+        except Exception as exc:
+            logger.exception("scan_all failed: %s", exc)
+            self._heading.setText("Scan failed")
+            self._status_label.setText(f"Error: {exc}")
+            self._ok_button.setEnabled(False)
+            self._cancel_button.setEnabled(True)
+            return
+
         self._candidates = result.candidates
 
+        errors = result.errors
+        if errors:
+            for err in errors:
+                logger.warning("Scan warning: %s", err)
+
         if not self._candidates:
+            msg = "No un-tracked games were found on your system."
+            if errors:
+                msg += f" ({len(errors)} detector(s) reported errors)"
             self._heading.setText("No new games found")
-            self._status_label.setText(
-                "No un-tracked games were found on your system."
-            )
-            self._button_box.setEnabled(False)
+            self._status_label.setText(msg)
+            self._ok_button.setEnabled(False)
+            self._cancel_button.setEnabled(True)
             return
 
         self._heading.setText(
             f"{len(self._candidates)} game(s) found"
         )
-        self._status_label.setText(
-            "Select the games you want to import and click 'Import Selected'."
-        )
-
-        errors = result.errors
+        status = "Select the games you want to import and click 'Import Selected'."
         if errors:
-            self._status_label.setText(
-                self._status_label.text() + f" ({len(errors)} warning(s))"
-            )
+            status += f" ({len(errors)} warning(s))"
+        self._status_label.setText(status)
 
         self._populate_table()
 
     def _populate_table(self) -> None:
         """Fill the table with candidate games."""
+        logger.debug("_populate_table: %d candidates", len(self._candidates))
         self._table.setRowCount(len(self._candidates))
         self._checkboxes = []
 
         for i, candidate in enumerate(self._candidates):
-            # Checkbox
-            checkbox = QCheckBox()
-            checkbox.setChecked(True)
-            self._checkboxes.append(checkbox)
+            try:
+                # Checkbox
+                checkbox = QCheckBox()
+                checkbox.setChecked(True)
+                self._checkboxes.append(checkbox)
 
-            checkbox_widget = QWidget()
-            cb_layout = QVBoxLayout(checkbox_widget)
-            cb_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            cb_layout.setContentsMargins(0, 0, 0, 0)
-            cb_layout.addWidget(checkbox)
-            self._table.setCellWidget(i, 0, checkbox_widget)
+                checkbox_widget = QWidget()
+                cb_layout = QVBoxLayout(checkbox_widget)
+                cb_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                cb_layout.setContentsMargins(0, 0, 0, 0)
+                cb_layout.addWidget(checkbox)
+                self._table.setCellWidget(i, 0, checkbox_widget)
 
-            # Game name
-            self._table.setItem(i, 1, QTableWidgetItem(candidate.name))
+                # Game name
+                self._table.setItem(i, 1, QTableWidgetItem(candidate.name))
 
-            # Platform
-            platform_display = candidate.platform.capitalize()
-            self._table.setItem(i, 2, QTableWidgetItem(platform_display))
+                # Platform
+                platform_display = candidate.platform.capitalize()
+                self._table.setItem(i, 2, QTableWidgetItem(platform_display))
 
-            # Executable path
-            self._table.setItem(i, 3, QTableWidgetItem(candidate.executable_path))
+                # Executable path
+                self._table.setItem(i, 3, QTableWidgetItem(candidate.executable_path))
+            except Exception as exc:
+                logger.exception("Error populating row %d: %s", i, exc)
 
     # ------------------------------------------------------------------
     # Private — slots

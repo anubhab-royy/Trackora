@@ -165,3 +165,20 @@ class TestDiscoveryOrchestrator:
         orch._detectors = []  # type: ignore[assignment]
         result = orch.scan_all()
         assert result.duration_ms >= 0
+
+    def test_dedup_by_platform_id(self) -> None:
+        """Same game from same platform with different paths deduped."""
+        orch = DiscoveryOrchestrator()
+
+        class SamePlatformDet:
+            platform = "steam"
+            def detect(self):
+                return [
+                    _make_candidate(name="CS2", exe="/lib1/cs2.exe", platform="steam", platform_id="730"),
+                    _make_candidate(name="CS2", exe="/lib2/cs2.exe", platform="steam", platform_id="730"),
+                ]
+
+        orch._detectors = [SamePlatformDet()]  # type: ignore[assignment]
+        result = orch.scan_all()
+        assert len(result.candidates) == 1
+        assert result.candidates[0].platform_id == "730"

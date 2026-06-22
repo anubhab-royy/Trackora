@@ -25,6 +25,8 @@ _SYSTEM_EXCLUDED_DIRS: frozenset[str] = frozenset({
 
 _MIN_FILE_SIZE_BYTES = 1_048_576  # 1 MB
 
+_MAX_SCAN_DEPTH = 8  # max subdirectory depth to prevent unbounded recursion
+
 _EXECUTABLE_PATTERNS = ("*.exe", "*.app")
 
 
@@ -34,10 +36,16 @@ class FolderDetector(GameDetector):
     Args:
         min_size_bytes: Minimum file size in bytes (default 1 MB).
             Overridable for testing.
+        max_depth: Maximum directory recursion depth (default 8).
     """
 
-    def __init__(self, min_size_bytes: int = _MIN_FILE_SIZE_BYTES) -> None:
+    def __init__(
+        self,
+        min_size_bytes: int = _MIN_FILE_SIZE_BYTES,
+        max_depth: int = _MAX_SCAN_DEPTH,
+    ) -> None:
         self._min_size = min_size_bytes
+        self._max_depth = max_depth
 
     @property
     def platform(self) -> str:
@@ -66,7 +74,7 @@ class FolderDetector(GameDetector):
                 continue
 
             try:
-                for entry in folder_path.rglob("*"):
+                for entry in self._walk_depth_limited(folder_path):
                     if self._is_excluded(entry):
                         continue
                     if not entry.is_file():
@@ -104,6 +112,42 @@ class FolderDetector(GameDetector):
     # ------------------------------------------------------------------
     # Private
     # ------------------------------------------------------------------
+
+    def _walk_depth_limited(self, root: Path) -> list[Path]:
+        """Walk directory tree up to ``_max_depth``, yielding file paths.
+
+        Prevents unbounded recursion on large or deeply-nested directories
+        while still finding games in reasonably structured game libraries.
+        """
+        results: list[Path] = []
+        stack: list[tuple[Path, int]] = [(root, 0)]
+        visited: set[str] = set()
+
+        while stack:
+            current, depth = stack.pop()
+            if depth > self._max_depth:
+                continue
+            if self._is_excluded(current):
+                continue
+            try:
+                with os.scandir(str(current)) as it:
+                    for entry in it:
+                        try:
+                            entry_path = Path(entry.path)
+                        except OSError:
+                            continue
+                        resolved = str(entry_path.resolve()).lower()
+                        if resolved in visited:
+                            continue
+                        visited.add(resolved)
+                        if entry.is_dir(follow_symlinks=False):
+                            stack.append((entry_path, depth + 1))
+                        elif entry.is_file():
+                            results.append(entry_path)
+            except (PermissionError, OSError):
+                continue
+
+        return results
 
     @staticmethod
     def _is_excluded(path: Path) -> bool:

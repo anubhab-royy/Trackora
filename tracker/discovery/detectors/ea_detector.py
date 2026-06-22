@@ -1,6 +1,6 @@
 """EA App detector.
 
-Reads EA App install records to find installed games.
+Reads EA App install records and/or registry to find installed games.
 """
 
 from __future__ import annotations
@@ -15,6 +15,11 @@ from tracker.discovery.models import CandidateGame
 
 logger = logging.getLogger(__name__)
 
+try:
+    import winreg
+except ImportError:
+    winreg = None  # type: ignore[assignment]
+
 
 class EADetector(GameDetector):
     """Detect games installed via the EA App."""
@@ -24,9 +29,23 @@ class EADetector(GameDetector):
         return "ea"
 
     def detect(self) -> list[CandidateGame]:
+        candidates = self._detect_from_files()
+
+        if not candidates:
+            candidates = self._detect_from_registry()
+
+        logger.info("EA detection complete: %d game(s) found", len(candidates))
+        return candidates
+
+    # ------------------------------------------------------------------
+    # Private — file-based detection (install-record/*.json)
+    # ------------------------------------------------------------------
+
+    def _detect_from_files(self) -> list[CandidateGame]:
+        """Detect games from install-record JSON files."""
         install_records_dir = self._find_install_records_dir()
         if install_records_dir is None:
-            logger.info("EA App not found — skipping EA detection")
+            logger.info("EA App not found — skipping EA file detection")
             return []
 
         if not install_records_dir.is_dir():
@@ -59,11 +78,66 @@ class EADetector(GameDetector):
                 )
             )
 
-        logger.info("EA detection complete: %d game(s) found", len(candidates))
+        return candidates
+
+    def _detect_from_registry(self) -> list[CandidateGame]:
+        """Detect EA games from registry as a fallback."""
+        if winreg is None:
+            return []
+
+        candidates: list[CandidateGame] = []
+        seen_paths: set[str] = set()
+
+        for root_key in (
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\EA Games"),
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\EA Games"),
+        ):
+            try:
+                key_handle = winreg.OpenKey(root_key[0], root_key[1])
+            except OSError:
+                continue
+
+            i = 0
+            while True:
+                try:
+                    game_key_name = winreg.EnumKey(key_handle, i)
+                    i += 1
+                except OSError:
+                    break
+
+                try:
+                    game_key = winreg.OpenKey(key_handle, game_key_name)
+                except OSError:
+                    continue
+
+                try:
+                    install_dir, _ = winreg.QueryValueEx(game_key, "Install Dir")
+                except OSError:
+                    winreg.CloseKey(game_key)
+                    continue
+
+                winreg.CloseKey(game_key)
+
+                if not install_dir or install_dir in seen_paths:
+                    continue
+                seen_paths.add(install_dir)
+
+                exe_path = self._resolve_executable(install_dir)
+                candidates.append(
+                    CandidateGame(
+                        name=game_key_name,
+                        executable_path=exe_path,
+                        platform="ea",
+                        platform_id="",
+                    )
+                )
+
+            winreg.CloseKey(key_handle)
+
         return candidates
 
     # ------------------------------------------------------------------
-    # Private
+    # Private — path discovery
     # ------------------------------------------------------------------
 
     @staticmethod

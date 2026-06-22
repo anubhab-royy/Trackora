@@ -10,6 +10,7 @@ import importlib
 import inspect
 import logging
 import pkgutil
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -44,6 +45,12 @@ class MigrationRegistry:
     ) -> list[type[Migration]]:
         """Scan *package_name* for concrete Migration subclasses.
 
+        Uses two strategies:
+        1. ``pkgutil.iter_modules`` (works in source, fails in frozen).
+        2. Fallback to ``sys.modules`` for modules already loaded (works in
+           frozen executables where ``trackora.core.migrations.__init__`` has
+           explicit imports).
+
         Args:
             package_name: The dotted package name to scan.
                           Defaults to ``trackora.core.migrations``.
@@ -62,30 +69,44 @@ class MigrationRegistry:
             logger.warning("Migration package not found: %s", package_name)
             return []
 
-        package_path = getattr(package, "__file__", None)
-        if package_path is None:
-            return []
-
-        package_dir = Path(package_path).parent
         migrations: list[type[Migration]] = []
 
-        for _importer, modname, _is_pkg in pkgutil.iter_modules(
-            [str(package_dir)]
-        ):
-            if modname in _SKIP_MODULES:
-                continue
+        # Strategy 1: pkgutil.iter_modules (source mode)
+        package_path = getattr(package, "__file__", None)
+        if package_path is not None:
+            package_dir = Path(package_path).parent
+            for _importer, modname, _is_pkg in pkgutil.iter_modules(
+                [str(package_dir)]
+            ):
+                if modname in _SKIP_MODULES:
+                    continue
+                try:
+                    module = importlib.import_module(f"{package_name}.{modname}")
+                except ImportError as exc:
+                    logger.warning("Cannot import migration module %s: %s", modname, exc)
+                    continue
+                for _name, obj in inspect.getmembers(module, inspect.isclass):
+                    if (
+                        obj is not Migration
+                        and issubclass(obj, Migration)
+                        and not inspect.isabstract(obj)
+                    ):
+                        migrations.append(obj)
 
-            try:
-                module = importlib.import_module(f"{package_name}.{modname}")
-            except ImportError as exc:
-                logger.warning("Cannot import migration module %s: %s", modname, exc)
+        # Strategy 2: sys.modules fallback (frozen mode)
+        prefix = f"{package_name}."
+        for modname, module in list(sys.modules.items()):
+            if not modname.startswith(prefix):
                 continue
-
+            short_name = modname[len(prefix):]
+            if short_name in _SKIP_MODULES:
+                continue
             for _name, obj in inspect.getmembers(module, inspect.isclass):
                 if (
                     obj is not Migration
                     and issubclass(obj, Migration)
                     and not inspect.isabstract(obj)
+                    and obj not in migrations
                 ):
                     migrations.append(obj)
 

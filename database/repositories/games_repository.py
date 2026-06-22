@@ -23,25 +23,37 @@ from database.models.game import Game
 logger = logging.getLogger(__name__)
 
 
+def _safe_get(row: sqlite3.Row, key: str, default: object = None) -> object:
+    """Safely access a column by name, returning *default* if missing.
+
+    Handles the case where a row was read from an older schema that
+    doesn't have the column yet (e.g. before a migration runs).
+    """
+    try:
+        return row[key]
+    except (IndexError, KeyError):
+        return default
+
+
 def _row_to_game(row: sqlite3.Row) -> Game:
     """Convert a sqlite3.Row from the games table into a Game dataclass."""
-    platform = row["platform"] if row["platform"] is not None else ""
-    platform_id = row["platform_id"] if row["platform_id"] is not None else ""
-    is_auto_discovered = bool(row["is_auto_discovered"]) if row["is_auto_discovered"] is not None else False
+    platform = _safe_get(row, "platform") or ""
+    platform_id = _safe_get(row, "platform_id") or ""
+    is_auto_discovered = bool(_safe_get(row, "is_auto_discovered", 0))
     return Game(
         id=row["id"],
         name=row["name"],
         process_name=row["process_name"],
         executable_path=row["executable_path"],
-        icon_path=row["icon_path"] or "",
+        icon_path=_safe_get(row, "icon_path") or "",
         is_enabled=bool(row["is_enabled"]),
-        platform=platform,
-        platform_id=platform_id,
+        platform=str(platform) if platform is not None else "",
+        platform_id=str(platform_id) if platform_id is not None else "",
         is_auto_discovered=is_auto_discovered,
-        first_played=_parse_dt(row["first_played"]),
-        last_played=_parse_dt(row["last_played"]),
-        created_at=_parse_dt(row["created_at"]) or datetime.now(UTC).replace(tzinfo=None),
-        updated_at=_parse_dt(row["updated_at"]) or datetime.now(UTC).replace(tzinfo=None),
+        first_played=_parse_dt(_safe_get(row, "first_played")),
+        last_played=_parse_dt(_safe_get(row, "last_played")),
+        created_at=_parse_dt(_safe_get(row, "created_at")) or datetime.now(UTC).replace(tzinfo=None),
+        updated_at=_parse_dt(_safe_get(row, "updated_at")) or datetime.now(UTC).replace(tzinfo=None),
     )
 
 

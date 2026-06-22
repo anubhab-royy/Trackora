@@ -20,6 +20,14 @@ from tracker.discovery.models import CandidateGame
 
 logger = logging.getLogger(__name__)
 
+# Known Steam redistributables / tools that should not appear as games.
+_STEAM_EXCLUDED_APP_IDS: frozenset[str] = frozenset({
+    "228980",  # Steamworks Common Redistributables
+    "329790",  # Steam Music
+    "480",     # Steamworks Common Redistributables (old id)
+    "897650",  # Steam Audio
+})
+
 
 class SteamDetector(GameDetector):
     """Detect games installed via Steam."""
@@ -44,8 +52,16 @@ class SteamDetector(GameDetector):
             for manifest_path in sorted(manifests_dir.glob("appmanifest_*.acf")):
                 try:
                     game = self._parse_manifest(manifest_path, lib)
-                    if game is not None:
-                        candidates.append(game)
+                    if game is None:
+                        continue
+                    if game.platform_id in _STEAM_EXCLUDED_APP_IDS:
+                        logger.debug(
+                            "Excluded redistributable: %s (%s)",
+                            game.name,
+                            game.platform_id,
+                        )
+                        continue
+                    candidates.append(game)
                 except Exception:
                     logger.exception("Failed to parse Steam manifest %s", manifest_path)
 
@@ -101,7 +117,13 @@ class SteamDetector(GameDetector):
 
     @staticmethod
     def _get_library_paths(steam_root: str) -> list[str]:
-        """Read libraryfolders.vdf and return list of library paths."""
+        """Read libraryfolders.vdf and return list of library paths.
+
+        Handles both legacy flat format:
+            "1" "C:\\Program Files (x86)\\Steam"
+        and modern nested format:
+            "0" { "path" "E:\\Applications\\Steam" ... }
+        """
         vdf_path = Path(steam_root) / "steamapps" / "libraryfolders.vdf"
         if not vdf_path.is_file():
             logger.warning("libraryfolders.vdf not found at %s", vdf_path)
@@ -113,12 +135,28 @@ class SteamDetector(GameDetector):
             logger.exception("Failed to parse libraryfolders.vdf")
             return [steam_root]
 
-        folders = data.get("LibraryFolders", {})
+        # Case-insensitive lookup: Steam versions differ on key casing
+        sections_key = next(
+            (k for k in data if k.lower() == "libraryfolders"),
+            None,
+        )
+        folders: dict = data.get(sections_key, {}) if sections_key else {}
+
         paths: list[str] = [steam_root]
-        # VDF keys are quoted strings; library indices are "1", "2", etc.
         for key in sorted(folders, key=_numeric_sort_key):
-            if key.isdigit():
-                paths.append(folders[key])
+            if not key.isdigit():
+                continue
+            value = folders[key]
+            # Modern format: {"path": "D:\\SteamLibrary", ...}
+            if isinstance(value, dict):
+                lib_path = value.get("path", "")
+            else:
+                # Legacy format: "D:\\SteamLibrary"
+                lib_path = str(value)
+            if lib_path and Path(lib_path).is_dir():
+                resolved = str(Path(lib_path).resolve())
+                if resolved not in {str(Path(p).resolve()) for p in paths}:
+                    paths.append(lib_path)
         return paths
 
     # ------------------------------------------------------------------

@@ -70,23 +70,34 @@ class EpicDetector(GameDetector):
 
     @staticmethod
     def _find_manifest_dir() -> str | None:
-        """Locate the Epic launcher data directory."""
+        """Locate the Epic launcher data directory.
+
+        Checks both the legacy UnrealEngineLauncher path (old installations)
+        and the modern EpicGamesLauncher/Data path (new installations).
+
+        Returns the directory containing ``LauncherInstalled.dat``, or None.
+        """
         if os.name == "nt":
             program_data = os.environ.get(
                 "PROGRAMDATA", "C:\\ProgramData"
             )
+            # Modern (most common): .../Epic/EpicGamesLauncher/Data/LauncherInstalled.dat
+            candidate = Path(program_data) / "Epic" / "EpicGamesLauncher" / "Data"
+            if (candidate / "LauncherInstalled.dat").is_file():
+                return str(candidate)
+            # Legacy: .../Epic/UnrealEngineLauncher/LauncherInstalled.dat
             candidate = Path(program_data) / "Epic" / "UnrealEngineLauncher"
-            if candidate.is_dir():
+            if (candidate / "LauncherInstalled.dat").is_file():
                 return str(candidate)
         else:
-            # Linux/macOS: check common locations
             for base in (
                 Path.home() / ".config" / "Epic",
                 Path.home() / "Library" / "Application Support" / "Epic",
             ):
-                candidate = base / "UnrealEngineLauncher"
-                if candidate.is_dir():
-                    return str(candidate)
+                for subdir in ("EpicGamesLauncher/Data", "UnrealEngineLauncher"):
+                    candidate = base / subdir
+                    if (candidate / "LauncherInstalled.dat").is_file():
+                        return str(candidate)
 
         return None
 
