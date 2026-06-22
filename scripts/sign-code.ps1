@@ -78,7 +78,9 @@ if (-not (Test-Path $pfxPath)) {
         -NotAfter (Get-Date).AddYears(3)
 
     # Export to PFX (with private key) and CER (public key only)
-    $password = ConvertTo-SecureString -String "TrackoraDev" -Force -AsPlainText
+    # Use environment variable PFX_PASSWORD, or fall back to a dev default
+    $pfxPassword = if ($env:PFX_PASSWORD) { $env:PFX_PASSWORD } else { "TrackoraDev" }
+    $password = ConvertTo-SecureString -String $pfxPassword -Force -AsPlainText
     Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $password | Out-Null
     Export-Certificate -Cert $cert -FilePath $cerPath -Type CERT | Out-Null
 
@@ -101,11 +103,12 @@ Write-Host "`nSigning executable: $ExecutablePath" -ForegroundColor Yellow
 $timestampServer = "http://timestamp.digicert.com"
 
 if (Test-Path $pfxPath) {
+    $signPassword = if ($env:PFX_PASSWORD) { $env:PFX_PASSWORD } else { "TrackoraDev" }
     & signtool sign `
         /fd SHA256 `
         /a `
         /f $pfxPath `
-        /p "TrackoraDev" `
+        /p $signPassword `
         /tr $timestampServer `
         /td SHA256 `
         $ExecutablePath

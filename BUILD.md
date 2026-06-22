@@ -85,7 +85,7 @@ iscc installer/Trackora.iss
 The installer is created at:
 
 ```
-installer/Output/Trackora-Setup-1.0.0.exe
+installer/Output/Trackora_Setup_v2.0.0.exe
 ```
 
 ## Code Signing
@@ -119,8 +119,8 @@ A GitHub Actions workflow is configured at `.github/workflows/ci.yml`:
 To trigger a release:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v2.0.0
+git push origin v2.0.0
 ```
 
 ## Automatic Updates

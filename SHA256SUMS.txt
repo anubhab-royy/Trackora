@@ -1,0 +1,6 @@
+# SHA-256 Checksums for Trackora v2.0.0 Release Assets
+# Generated: 2026-06-22
+# Verify with: certutil -hashfile <filename> SHA256
+
+# Trackora_Setup_v2.0.0.exe — replace the hash below with the actual checksum
+# SHA256(<Trackora_Setup_v2.0.0.exe>)= <replace-with-actual-checksum>
