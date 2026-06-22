@@ -32,16 +32,19 @@ SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS games (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    name             TEXT    NOT NULL,
-    process_name     TEXT    NOT NULL,
-    executable_path  TEXT    NOT NULL DEFAULT '',
-    icon_path        TEXT             DEFAULT NULL,
-    is_enabled       INTEGER NOT NULL DEFAULT 1,
-    first_played     DATETIME         DEFAULT NULL,
-    last_played      DATETIME         DEFAULT NULL,
-    created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    name               TEXT    NOT NULL,
+    process_name       TEXT    NOT NULL,
+    executable_path    TEXT    NOT NULL DEFAULT '',
+    icon_path          TEXT             DEFAULT NULL,
+    is_enabled         INTEGER NOT NULL DEFAULT 1,
+    platform           TEXT             DEFAULT NULL,
+    platform_id        TEXT             DEFAULT NULL,
+    is_auto_discovered INTEGER NOT NULL DEFAULT 0,
+    first_played       DATETIME         DEFAULT NULL,
+    last_played        DATETIME         DEFAULT NULL,
+    created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS sessions (

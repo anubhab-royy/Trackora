@@ -17,13 +17,13 @@ Architecture notes:
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
 from trackora import __version__
+from trackora.core.paths import LOGS_DIR as _LOGS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -34,15 +34,9 @@ _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 def _get_default_log_dir() -> Path:
     """Return a platform-appropriate log directory.
 
-    On Windows:  %APPDATA%/Trackora/logs/
-    On Linux:     ~/.local/share/Trackora/logs/
-    When frozen:  same as above (never next to the executable).
+    Delegates to trackora.core.paths.LOGS_DIR.
     """
-    if os.name == "nt":
-        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
-    else:
-        base = Path.home() / ".local" / "share"
-    return base / "Trackora" / "logs"
+    return _LOGS_DIR
 
 
 _DEFAULT_LOG_DIR = _get_default_log_dir()

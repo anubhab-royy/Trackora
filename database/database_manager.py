@@ -14,7 +14,7 @@ Responsibilities:
 Design notes:
     - All SQL lives in the database layer only (architecture.md rule).
     - Database file path: database/tracker.db  (tech_spec.md)
-    - Tables: games, sessions, active_sessions, settings, statistics_cache
+    - Tables: games, sessions, active_sessions, settings
     - Indexes defined in database_schema.md are created here.
 """
 
@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import threading
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,7 @@ class DatabaseManager:
             self._db_path = db_path
 
         self._connection: sqlite3.Connection | None = None
+        self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Public interface
@@ -83,6 +85,11 @@ class DatabaseManager:
                 "DatabaseManager has not been initialized. Call initialize() first."
             )
         return self._connection
+
+    @property
+    def lock(self) -> threading.Lock:
+        """Return the threading lock for serialising database access."""
+        return self._lock
 
     def close(self) -> None:
         """Commit any pending work and close the connection."""
@@ -123,6 +130,8 @@ class DatabaseManager:
         )
         # Return rows as sqlite3.Row objects so columns are accessible by name.
         self._connection.row_factory = sqlite3.Row
+        # Callers must acquire self._lock before using the connection
+        # from background threads to prevent 'database is locked' errors.
 
     def _apply_pragmas(self) -> None:
         """
@@ -135,107 +144,119 @@ class DatabaseManager:
         cursor = self._connection.cursor()
         cursor.execute("PRAGMA journal_mode = WAL;")
         cursor.execute("PRAGMA foreign_keys = ON;")
+        cursor.execute("PRAGMA busy_timeout = 5000;")
         self._connection.commit()
-        logger.debug("PRAGMAs applied: WAL mode ON, foreign_keys ON.")
+        logger.debug("PRAGMAs applied: WAL mode ON, foreign_keys ON, busy_timeout=5000.")
 
     def _create_schema(self) -> None:
         """Create all tables and indexes defined in database_schema.md."""
         assert self._connection is not None
         cursor = self._connection.cursor()
 
-        # ------------------------------------------------------------------ #
-        # Table: games                                                         #
-        # ------------------------------------------------------------------ #
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS games (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                name             TEXT    NOT NULL,
-                process_name     TEXT    NOT NULL,
-                executable_path  TEXT    NOT NULL,
-                icon_path        TEXT    NOT NULL DEFAULT '',
-                is_enabled       INTEGER NOT NULL DEFAULT 1,
-                first_played     DATETIME,
-                last_played      DATETIME,
-                created_at       DATETIME NOT NULL,
-                updated_at       DATETIME NOT NULL
-            );
-        """)
+        cursor.execute("BEGIN;")
+        try:
+            # ------------------------------------------------------------------ #
+            # Table: games                                                         #
+            # ------------------------------------------------------------------ #
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS games (
+                    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name               TEXT    NOT NULL,
+                    process_name       TEXT    NOT NULL,
+                    executable_path    TEXT    NOT NULL,
+                    icon_path          TEXT    NOT NULL DEFAULT '',
+                    is_enabled         INTEGER NOT NULL DEFAULT 1,
+                    platform           TEXT    DEFAULT NULL,
+                    platform_id        TEXT    DEFAULT NULL,
+                    is_auto_discovered INTEGER NOT NULL DEFAULT 0,
+                    first_played       DATETIME,
+                    last_played        DATETIME,
+                    created_at         DATETIME NOT NULL,
+                    updated_at         DATETIME NOT NULL
+                );
+            """)
 
-        # ------------------------------------------------------------------ #
-        # Table: sessions                                                       #
-        # ------------------------------------------------------------------ #
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS sessions (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                game_id          INTEGER  NOT NULL,
-                start_time       DATETIME NOT NULL,
-                end_time         DATETIME NOT NULL,
-                duration_seconds INTEGER  NOT NULL,
-                created_at       DATETIME NOT NULL,
-                FOREIGN KEY (game_id) REFERENCES games (id)
-            );
-        """)
+            # ------------------------------------------------------------------ #
+            # Table: sessions                                                       #
+            # ------------------------------------------------------------------ #
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS sessions (
+                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                    game_id          INTEGER  NOT NULL,
+                    start_time       DATETIME NOT NULL,
+                    end_time         DATETIME NOT NULL,
+                    duration_seconds INTEGER  NOT NULL,
+                    created_at       DATETIME NOT NULL,
+                    FOREIGN KEY (game_id) REFERENCES games (id)
+                );
+            """)
 
-        # ------------------------------------------------------------------ #
-        # Table: active_sessions  (crash / shutdown recovery)                 #
-        # ------------------------------------------------------------------ #
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS active_sessions (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                game_id    INTEGER  NOT NULL,
-                process_id INTEGER  NOT NULL,
-                start_time DATETIME NOT NULL,
-                created_at DATETIME NOT NULL
-            );
-        """)
+            # ------------------------------------------------------------------ #
+            # Table: active_sessions  (crash / shutdown recovery)                 #
+            # ------------------------------------------------------------------ #
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS active_sessions (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    game_id    INTEGER  NOT NULL,
+                    process_id INTEGER  NOT NULL,
+                    start_time DATETIME NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    FOREIGN KEY (game_id) REFERENCES games (id)
+                );
+            """)
 
-        # ------------------------------------------------------------------ #
-        # Table: settings                                                       #
-        # ------------------------------------------------------------------ #
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS settings (
-                key        TEXT     PRIMARY KEY,
-                value      TEXT     NOT NULL DEFAULT '',
-                updated_at DATETIME NOT NULL
-            );
-        """)
+            # ------------------------------------------------------------------ #
+            # Table: settings                                                       #
+            # ------------------------------------------------------------------ #
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS settings (
+                    key        TEXT     PRIMARY KEY,
+                    value      TEXT     NOT NULL DEFAULT '',
+                    updated_at DATETIME NOT NULL
+                );
+            """)
 
-        # ------------------------------------------------------------------ #
-        # Table: statistics_cache  (optional future optimisation)              #
-        # ------------------------------------------------------------------ #
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS statistics_cache (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                game_id       INTEGER NOT NULL,
-                period_type   TEXT    NOT NULL,
-                period_key    TEXT    NOT NULL,
-                value_seconds INTEGER NOT NULL DEFAULT 0
-            );
-        """)
+            # ------------------------------------------------------------------ #
+            # Table: _migrations  (upgrade foundation — upgrade-foundation-spec)   #
+            # ------------------------------------------------------------------ #
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS _migrations (
+                    migration_id TEXT PRIMARY KEY,
+                    description  TEXT NOT NULL,
+                    app_version  TEXT NOT NULL,
+                    checksum     TEXT NOT NULL,
+                    applied_at   TEXT NOT NULL,
+                    duration_ms  INTEGER NOT NULL DEFAULT 0
+                );
+            """)
 
-        # ------------------------------------------------------------------ #
-        # Indexes (database_schema.md)                                         #
-        # ------------------------------------------------------------------ #
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_games_process_name
-            ON games (process_name);
-        """)
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_sessions_game_id
-            ON sessions (game_id);
-        """)
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_sessions_start_time
-            ON sessions (start_time);
-        """)
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_sessions_end_time
-            ON sessions (end_time);
-        """)
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_active_sessions_game_id
-            ON active_sessions (game_id);
-        """)
+            # ------------------------------------------------------------------ #
+            # Indexes (database_schema.md)                                         #
+            # ------------------------------------------------------------------ #
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_games_process_name
+                ON games (process_name);
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_sessions_game_id
+                ON sessions (game_id);
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_sessions_start_time
+                ON sessions (start_time);
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_sessions_end_time
+                ON sessions (end_time);
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_active_sessions_game_id
+                ON active_sessions (game_id);
+            """)
+            self._connection.commit()
+        except Exception:
+            self._connection.rollback()
+            logger.error("Database schema creation failed; rolled back.")
+            raise
 
-        self._connection.commit()
         logger.debug("Database schema created / verified successfully.")

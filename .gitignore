@@ -28,6 +28,8 @@ installer/Output/
 
 # Runtime data
 logs/
+startup.log
+*.py,cover
 *.db
 *.db-journal
 *.db-wal
@@ -54,3 +56,4 @@ desktop.ini
 # Environment
 .env
 .env.local
+.env.*

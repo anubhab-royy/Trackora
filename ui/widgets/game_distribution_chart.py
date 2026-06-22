@@ -105,7 +105,8 @@ class GameDistributionChart(QWidget):
         self._plot.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        self._plot.setMinimumHeight(220)
+        self._plot.setMinimumHeight(180)
+        self._plot.setMaximumHeight(280)
         self._plot.showGrid(x=True, y=False, alpha=0.3)
         self._plot.getAxis("bottom").setLabel("Hours", color=_COLOR_AXIS)
         self._plot.getAxis("left").setLabel("", color=_COLOR_AXIS)
@@ -118,7 +119,7 @@ class GameDistributionChart(QWidget):
 
         layout.addWidget(self._plot)
 
-        self._no_data_label = QLabel("No session data yet")
+        self._no_data_label = QLabel("No playtime data available yet.\nStart tracking games to see analytics.")
         self._no_data_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._no_data_label.setStyleSheet(
             f"color: {_COLOR_TEXT}; font-size: 12px; background: transparent;"

@@ -90,25 +90,7 @@ Examples:
 
 ---
 
-# Table: statistics_cache
-
-Optional future optimization.
-
-| Field         | Type                |
-| ------------- | ------------------- |
-| id            | INTEGER PRIMARY KEY |
-| game_id       | INTEGER             |
-| period_type   | TEXT                |
-| period_key    | TEXT                |
-| value_seconds | INTEGER             |
-
-Examples:
-
-* daily
-* weekly
-* monthly
-
----
+# ~~Table: statistics_cache~~ (removed in v1.1.0 — dead code)
 
 # Future Tables
 

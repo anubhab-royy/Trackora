@@ -1,5 +1,5 @@
 """
-MainWindow — Phase 10
+MainWindow — Phase 12
 Application-level window that assembles all UI views into a single
 QMainWindow with sidebar navigation.
 
@@ -8,13 +8,15 @@ Architecture:
   - Hosts them in a QStackedWidget switched by the sidebar.
   - Integrates TrayService for minimize-to-tray.
   - Provides theme toggle and export actions.
+  - Processes offline report queue on startup.
+  - Detects unexpected shutdowns and prompts user.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import (
@@ -37,11 +39,23 @@ from database.repositories import (
     GamesRepository,
     SettingsRepository,
 )
+from services.crash.crash_service import CrashService
+from services.crash.diagnostic_service import DiagnosticService
 from services.export_service import ExportService
 from services.game_service import GameService
 from services.session_history_service import SessionHistoryService
+from services.support.github_issue_service import GitHubIssueService
+from services.support.report_queue_service import ReportQueueService
+from services.support.reporting_interface import AbstractReportService
+from services.support.support_service import SupportService
 from services.tray_service import TrayService
+from services.update_announcements_service import UpdateAnnouncementsService
+from services.update_center_service import UpdateCenterService
+from tracker.tracking_state import TrackingState
+from trackora.core.build_info import BUILD_CHANNEL
+from trackora.core.environment import Environment
 from trackora_stats.statistics_service import StatisticsService
+from ui.crash_dialog import CrashDialog
 from ui.dashboard.dashboard_controller import DashboardController
 from ui.dashboard.dashboard_widget import DashboardWidget
 from ui.games.games_controller import GamesController
@@ -50,13 +64,18 @@ from ui.history.history_controller import HistoryController
 from ui.history.history_view import HistoryView
 from ui.settings.settings_controller import SettingsController
 from ui.settings.settings_view import SettingsView
+from ui.support_center.support_center_controller import SupportCenterController
+from ui.support_center.support_center_widget import SupportCenterWidget
+from ui.dialogs.update_dialog import UpdateDialog
 from ui.themes.theme_manager import Theme, ThemeManager
 from ui.widgets.charts_controller import ChartsController
 from ui.widgets.charts_view import ChartsView
+from ui.history.history_view import HistoryView
+from ui.widgets.update_banner import UpdateBanner
 
 logger = logging.getLogger(__name__)
 
-_NAV_ITEMS = ["Dashboard", "Games", "History", "Charts", "Settings"]
+_NAV_ITEMS = ["Dashboard", "Games", "History", "Charts", "Settings", "Support Center"]
 
 
 class MainWindow(QMainWindow):
@@ -77,6 +96,9 @@ class MainWindow(QMainWindow):
         settings_repo: SettingsRepository,
         active_sessions_repo: ActiveSessionsRepository,
         games_repo: GamesRepository,
+        support_service: SupportService | None = None,
+        tracking_state: TrackingState | None = None,
+        report_service: AbstractReportService | None = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -88,8 +110,31 @@ class MainWindow(QMainWindow):
         self._settings_repo = settings_repo
         self._active_repo = active_sessions_repo
         self._games_repo = games_repo
+        self._tracking_state = tracking_state
 
-        self.setWindowTitle("Trackora")
+        self._diagnostic_service = DiagnosticService()
+        self._crash_service = CrashService(self._diagnostic_service)
+        self._report_service: AbstractReportService = (
+            report_service or GitHubIssueService(self._settings_repo)
+        )
+        self._announcements_service = UpdateAnnouncementsService(
+            remote_url=self._get_announcements_url(),
+        )
+        self._support_service = support_service or SupportService(
+            github_service=self._report_service,
+            queue_service=ReportQueueService(),
+            announcements_service=self._announcements_service,
+        )
+
+        self._check_for_crashes()
+        self._crash_service.mark_startup()
+
+        self._process_report_queue()
+        self._queue_retry_timer = QTimer()
+        self._queue_retry_timer.timeout.connect(self._process_report_queue)
+        self._queue_retry_timer.start(60000)
+
+        self.setWindowTitle(self._window_title())
         self.setMinimumSize(1000, 650)
         self.resize(1200, 750)
 
@@ -99,6 +144,14 @@ class MainWindow(QMainWindow):
         self._create_menu_actions()
         self._setup_tray()
         self._setup_auto_refresh()
+
+        # Non-blocking startup update check
+        QTimer.singleShot(5000, self._perform_startup_update_check)
+
+        # Ensure clean shutdown even on OS shutdown
+        app = QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._on_about_to_quit)
 
         logger.info("MainWindow initialised.")
 
@@ -121,7 +174,10 @@ class MainWindow(QMainWindow):
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(0)
 
-        title = QLabel("Trackora")
+        suffix = {
+            Environment.DEVELOPMENT: " [DEV]",
+        }.get(BUILD_CHANNEL, "")
+        title = QLabel(f"Trackora{suffix}")
         title.setObjectName("AppTitle")
         sidebar_layout.addWidget(title)
 
@@ -132,11 +188,24 @@ class MainWindow(QMainWindow):
 
         sidebar_layout.addWidget(self._nav, stretch=1)
 
+        content_frame = QWidget()
+        content_layout = QVBoxLayout(content_frame)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+
+        self._update_banner = UpdateBanner(content_frame)
+        self._update_banner.hide()
+        self._update_banner.ignored.connect(self._on_update_banner_ignored)
+        self._update_banner.view_notes_requested.connect(self._on_show_release_notes)
+
+        content_layout.addWidget(self._update_banner)
+
         self._content = QStackedWidget()
         self._content.setObjectName("ContentArea")
+        content_layout.addWidget(self._content, stretch=1)
 
         root.addWidget(sidebar)
-        root.addWidget(self._content, stretch=1)
+        root.addWidget(content_frame, stretch=1)
 
     def _build_views(self) -> None:
         self._dash_ctrl = DashboardController(
@@ -145,8 +214,17 @@ class MainWindow(QMainWindow):
         self._dash_view = DashboardWidget(self._dash_ctrl, self)
         self._content.addWidget(self._dash_view)
 
+        # Discovery orchestrator for "Scan For Games"
+        from tracker.discovery.orchestrator import DiscoveryOrchestrator
+        discovery_orchestrator = DiscoveryOrchestrator(
+            exists_by_executable_path=self._games_repo.get_by_executable_path,
+            exists_by_platform_id=self._games_repo.exists_by_platform_id,
+        )
+
         self._games_view = GamesView(self)
-        self._games_ctrl = GamesController(self._games_view, self._game_service)
+        self._games_ctrl = GamesController(
+            self._games_view, self._game_service, discovery_orchestrator
+        )
         self._content.addWidget(self._games_view)
 
         self._hist_view = HistoryView(self)
@@ -161,6 +239,11 @@ class MainWindow(QMainWindow):
         )
         self._content.addWidget(self._charts_view)
 
+        self._update_service = UpdateCenterService(
+            settings_repo=self._settings_repo,
+            repo="anomalyco/trackora",
+        )
+
         self._settings_view = SettingsView(self)
         self._settings_ctrl = SettingsController(
             view=self._settings_view,
@@ -168,11 +251,20 @@ class MainWindow(QMainWindow):
             theme_manager=self._theme_manager,
             export_service=self._export_service,
             parent_widget=self,
+            update_service=self._update_service,
         )
         self._content.addWidget(self._settings_view)
 
+        self._support_view = SupportCenterWidget(self)
+        self._support_ctrl = SupportCenterController(
+            view=self._support_view,
+            support_service=self._support_service,
+        )
+        self._content.addWidget(self._support_view)
+
     def _connect_nav(self) -> None:
         self._nav.currentRowChanged.connect(self._content.setCurrentIndex)
+        self._content.currentChanged.connect(self._on_page_changed)
         self._nav.setCurrentRow(0)
 
     def _create_menu_actions(self) -> None:
@@ -208,6 +300,7 @@ class MainWindow(QMainWindow):
         self._tray.show_requested.connect(self._show_from_tray)
         self._tray.dashboard_requested.connect(lambda: (self.switch_to("Dashboard"), self._show_from_tray()))
         self._tray.history_requested.connect(lambda: (self.switch_to("History"), self._show_from_tray()))
+        self._tray.check_updates_requested.connect(self._on_check_updates_from_tray)
         self._tray.quit_requested.connect(self._quit_app)
         self._tray.show()
 
@@ -215,6 +308,19 @@ class MainWindow(QMainWindow):
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self._refresh_current_view)
         self._refresh_timer.start(5000)
+
+    def _on_page_changed(self, index: int) -> None:
+        """Refresh content when the visible page changes."""
+        widget = self._content.widget(index)
+        if isinstance(widget, ChartsView):
+            logger.debug("Page changed to Charts — refreshing chart data.")
+            self._charts_ctrl.refresh()
+        elif isinstance(widget, DashboardWidget):
+            logger.debug("Page changed to Dashboard — refreshing data.")
+            widget.refresh()
+        elif isinstance(widget, HistoryView):
+            logger.debug("Page changed to History — refreshing data.")
+            self._hist_ctrl.refresh()
 
     # ------------------------------------------------------------------
     # Slots
@@ -229,15 +335,58 @@ class MainWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
 
+    def _on_about_to_quit(self) -> None:
+        """Ensure clean shutdown is marked.
+
+        Handles OS shutdown (WM_ENDSESSION) and any path where
+        app.quit() is called without going through _quit_app.
+        """
+        self._crash_service.mark_clean_shutdown()
+
     def _quit_app(self) -> None:
+        self._crash_service.mark_clean_shutdown()
         app = QApplication.instance()
         if app is not None:
             app.quit()
+
+    def _perform_startup_update_check(self) -> None:
+        """Check for updates at startup, non-blocking."""
+        if not self._settings_repo.get_bool("update_auto_check_enabled", default=True):
+            return
+        try:
+            result = self._update_service.check_for_updates()
+            if result.update_available and self._update_service.is_update_available():
+                assert result.release is not None
+                self._update_banner.show(
+                    result.release.version, result.release.body
+                )
+                self._tray.show_notification(
+                    "Trackora Update",
+                    f"Trackora {result.release.version} is ready to download",
+                )
+        except Exception as exc:
+            logger.warning("Startup update check failed: %s", exc)
+
+    def _on_update_banner_ignored(self, version: str) -> None:
+        self._update_service.ignore_version(version)
+
+    def _on_check_updates_from_tray(self) -> None:
+        result = self._update_service.check_for_updates()
+        UpdateDialog(result, parent=self).exec()
+
+    def _on_show_release_notes(self) -> None:
+        result = self._update_service.get_cached_result()
+        if result and result.release:
+            UpdateDialog(result, parent=self).exec()
 
     def _refresh_current_view(self) -> None:
         widget = self._content.currentWidget()
         if isinstance(widget, DashboardWidget):
             widget.refresh()
+        elif isinstance(widget, ChartsView):
+            self._charts_ctrl.refresh()
+        elif isinstance(widget, HistoryView):
+            self._hist_ctrl.refresh()
 
     # ------------------------------------------------------------------
     # Public API
@@ -292,3 +441,84 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             self._theme_manager.apply_theme(app, new_theme)
+
+    # ------------------------------------------------------------------
+    # Queue processing
+    # ------------------------------------------------------------------
+
+    def _process_report_queue(self) -> None:
+        """Scan and submit any pending offline reports."""
+        try:
+            result = self._support_service.process_queue()
+            if result is None:
+                return
+            if result.attempted > 0:
+                logger.info(
+                    "Queue processing: %d attempted, %d succeeded, %d failed.",
+                    result.attempted, result.succeeded, result.failed,
+                )
+        except Exception as exc:
+            logger.error("Queue processing error: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Crash detection
+    # ------------------------------------------------------------------
+
+    def _check_for_crashes(self) -> None:
+        """Check if the previous session crashed and prompt the user."""
+        try:
+            active: list[dict[str, Any]] = []
+            tracked = 0
+            was_tracking = False
+            if self._tracking_state is not None:
+                for session in self._tracking_state.active_sessions.values():
+                    active.append({
+                        "game_id": session.game_id,
+                        "game_name": session.game_name,
+                        "process_id": session.process_id,
+                    })
+                tracked = len(self._tracking_state.tracked_games)
+                was_tracking = self._tracking_state.is_running
+
+            result = self._crash_service.check_for_crash(
+                active_sessions=active,
+                tracked_games=tracked,
+                was_tracking=was_tracking,
+            )
+            if not result.has_crashed:
+                return
+
+            dialog = CrashDialog(
+                report=result.report,
+                report_path=result.report_path,
+                github_service=self._report_service,
+                queue_service=self._queue_service,
+                parent=self,
+            )
+            dialog.exec()
+        except Exception as exc:
+            logger.error("Crash check failed: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Announcements URL
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _window_title() -> str:
+        suffix = {
+            Environment.DEVELOPMENT: " [DEV]",
+        }.get(BUILD_CHANNEL, "")
+        return f"Trackora{suffix}"
+
+    @staticmethod
+    def _get_announcements_url() -> str:
+        """Return the remote URL for update announcements.
+
+        The URL and JSON format are configured separately from the
+        codebase.  This method exists so it can be overridden or
+        replaced with a user-configurable setting in the future.
+        """
+        return (
+            "https://raw.githubusercontent.com/"
+            "anomalco/trackora-announcements/main/announcements.json"
+        )

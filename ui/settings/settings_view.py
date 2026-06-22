@@ -12,6 +12,7 @@ import logging
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -19,6 +20,9 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from trackora.core.build_info import BUILD_CHANNEL, BUILD_VERSION
+from trackora.core.paths import BASE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +36,16 @@ class SettingsView(QWidget):
         startup_toggled(enabled: bool)
         export_csv_requested()
         export_json_requested()
+        check_updates_requested()
+        view_release_notes_requested()
     """
 
     theme_toggled = pyqtSignal(bool)
     startup_toggled = pyqtSignal(bool)
     export_csv_requested = pyqtSignal()
     export_json_requested = pyqtSignal()
+    check_updates_requested = pyqtSignal()
+    view_release_notes_requested = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -48,6 +56,13 @@ class SettingsView(QWidget):
 
     def set_start_with_windows(self, enabled: bool) -> None:
         self._startup_check.setChecked(enabled)
+
+    def set_last_checked(self, iso_timestamp: str) -> None:
+        self._last_checked_label.setText(iso_timestamp)
+
+    def set_update_status(self, message: str, is_update_available: bool) -> None:
+        self._update_status_label.setText(message)
+        self._view_notes_btn.setVisible(is_update_available)
 
     def _setup_ui(self) -> None:
         self.setObjectName("SettingsView")
@@ -63,6 +78,7 @@ class SettingsView(QWidget):
         root_layout.addWidget(self._build_appearance_group())
         root_layout.addWidget(self._build_startup_group())
         root_layout.addWidget(self._build_data_group())
+        root_layout.addWidget(self._build_about_group())
         root_layout.addStretch()
 
     def _build_appearance_group(self) -> QGroupBox:
@@ -74,6 +90,50 @@ class SettingsView(QWidget):
         self._theme_check.setChecked(True)
         self._theme_check.toggled.connect(self.theme_toggled.emit)
         layout.addWidget(self._theme_check)
+
+        return group
+
+    def _build_about_group(self) -> QGroupBox:
+        group = QGroupBox("About")
+        layout = QFormLayout(group)
+        layout.setSpacing(8)
+
+        channel_label = QLabel({
+            "production": "Production",
+            "development": "Development",
+        }.get(BUILD_CHANNEL, BUILD_CHANNEL))
+        channel_label.setTextInteractionFlags(channel_label.textInteractionFlags())
+        layout.addRow("Build Channel:", channel_label)
+
+        version_label = QLabel(BUILD_VERSION)
+        version_label.setTextInteractionFlags(version_label.textInteractionFlags())
+        layout.addRow("Version:", version_label)
+
+        data_label = QLabel(str(BASE_DIR))
+        data_label.setWordWrap(True)
+        data_label.setTextInteractionFlags(data_label.textInteractionFlags())
+        layout.addRow("Data Directory:", data_label)
+
+        self._check_updates_btn = QPushButton("Check for Updates")
+        self._check_updates_btn.setObjectName("CheckUpdatesButton")
+        self._check_updates_btn.clicked.connect(self.check_updates_requested.emit)
+        layout.addRow("", self._check_updates_btn)
+
+        self._last_checked_label = QLabel("")
+        self._last_checked_label.setTextInteractionFlags(
+            self._last_checked_label.textInteractionFlags()
+        )
+        layout.addRow("Last checked:", self._last_checked_label)
+
+        self._update_status_label = QLabel("")
+        self._update_status_label.setWordWrap(True)
+        layout.addRow("", self._update_status_label)
+
+        self._view_notes_btn = QPushButton("View Release Notes")
+        self._view_notes_btn.setObjectName("SecondaryButton")
+        self._view_notes_btn.clicked.connect(self.view_release_notes_requested.emit)
+        self._view_notes_btn.hide()
+        layout.addRow("", self._view_notes_btn)
 
         return group
 

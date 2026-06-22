@@ -28,10 +28,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt ruff mypy
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Type check
+        run: mypy trackora database services tracker ui --explicit-package-bases --ignore-missing-imports
 
       - name: Run tests
-        run: python -m pytest --tb=short --cov=trackora --cov-report=term-missing
+        run: python -m pytest --tb=short --cov=trackora --cov=database --cov=services --cov=tracker --cov-report=term-missing
 
   build:
     name: Build executable
@@ -53,11 +59,16 @@ jobs:
       - name: Build executable
         run: pyinstaller Trackora.spec
 
-      - name: Upload executable artifact
+      - name: Build installer
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.5
+        with:
+          path: installer/Trackora.iss
+
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Trackora.exe
-          path: dist/Trackora.exe
+          name: Trackora-Installer
+          path: installer/Output/*.exe
 
   release:
     name: Create Release
@@ -68,11 +79,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download executable
+      - name: Download installer
         uses: actions/download-artifact@v4
         with:
-          name: Trackora.exe
-          path: dist/
+          name: Trackora-Installer
+          path: installer/Output/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -80,6 +91,6 @@ jobs:
           name: Trackora ${{ github.ref_name }}
           body_path: CHANGELOG.md
           files: |
-            dist/Trackora.exe
+            installer/Output/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

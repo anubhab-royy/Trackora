@@ -26,6 +26,9 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QObject, pyqtSignal
+
+from trackora.core.build_info import BUILD_CHANNEL
+from trackora.core.environment import Environment
 from PyQt6.QtGui import QAction, QIcon, QPixmap
 from PyQt6.QtWidgets import QMenu, QSystemTrayIcon, QWidget
 
@@ -39,11 +42,12 @@ class TrayService(QObject):
     System tray icon for Trackora.
 
     Signals:
-        show_requested      — user clicked "Show" or double-clicked tray icon
-        hide_requested      — user clicked "Hide"
-        dashboard_requested — user clicked "Dashboard"
-        history_requested   — user clicked "History"
-        quit_requested      — user clicked "Quit"
+        show_requested          — user clicked "Show" or double-clicked tray icon
+        hide_requested          — user clicked "Hide"
+        dashboard_requested     — user clicked "Dashboard"
+        history_requested       — user clicked "History"
+        check_updates_requested — user clicked "Check for Updates"
+        quit_requested          — user clicked "Quit"
 
     Args:
         parent_window: The main QWidget that should be shown/hidden.
@@ -54,6 +58,7 @@ class TrayService(QObject):
     hide_requested = pyqtSignal()
     dashboard_requested = pyqtSignal()
     history_requested = pyqtSignal()
+    check_updates_requested = pyqtSignal()
     quit_requested = pyqtSignal()
 
     def __init__(
@@ -77,7 +82,10 @@ class TrayService(QObject):
         icon = self._load_icon()
 
         self._tray_icon = QSystemTrayIcon(icon, self._window)
-        self._tray_icon.setToolTip("Trackora")
+        suffix = {
+            Environment.DEVELOPMENT: " [DEV]",
+        }.get(BUILD_CHANNEL, "")
+        self._tray_icon.setToolTip(f"Trackora{suffix}")
 
         menu = self._build_menu()
         self._tray_icon.setContextMenu(menu)
@@ -151,6 +159,10 @@ class TrayService(QObject):
         menu.addAction(self.history_action)
 
         menu.addSeparator()
+
+        self.check_updates_action = QAction("Check for Updates", menu)
+        self.check_updates_action.triggered.connect(self.check_updates_requested.emit)
+        menu.addAction(self.check_updates_action)
 
         self.quit_action = QAction("Quit", menu)
         self.quit_action.triggered.connect(self.quit_requested.emit)

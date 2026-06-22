@@ -35,6 +35,9 @@ class Game:
     executable_path: str
     icon_path: str = ""
     is_enabled: bool = True
+    platform: str = ""
+    platform_id: str = ""
+    is_auto_discovered: bool = False
     first_played: datetime | None = None
     last_played: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC).replace(tzinfo=None))

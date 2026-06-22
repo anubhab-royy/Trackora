@@ -164,7 +164,7 @@ class TestSingleSessionRecovery:
         assert created_session.game_id == 999
 
     def test_recover_single_session_start_time_preserved(self):
-        start = datetime(2024, 6, 15, 10, 0, 0, tzinfo=timezone.utc)
+        start = datetime.now(tz=timezone.utc) - timedelta(hours=1)
         orphan = make_active_session(id=1, start_time=start)
         active_repo, sessions_repo = make_repos(active_sessions=[orphan])
         manager = RecoveryManager(active_repo, sessions_repo)

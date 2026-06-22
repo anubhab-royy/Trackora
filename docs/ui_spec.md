@@ -1,6 +1,6 @@
 # Trackora UI Specification
 
-Version: 1.0
+Version: 1.1
 
 ## Design Philosophy
 
@@ -30,7 +30,9 @@ Sections:
 1. Dashboard
 2. Games
 3. History
-4. Settings
+4. Charts
+5. Settings
+6. Support Center
 
 Navigation:
 
@@ -186,6 +188,81 @@ Light Theme:
 Optional
 
 Theme must persist after restart.
+
+---
+
+# Support Center Screen
+
+Purpose:
+
+Central hub for user support interactions.
+
+## Navigation
+
+Internal tabs (top bar):
+
+1. Report Bug
+2. Suggest Feature
+3. General Feedback
+4. Upcoming Updates
+
+Form submission implemented via GitHub Issues REST API.
+
+Each form page has a Submit button. On submit:
+1. Form data is validated (title/description required).
+2. BugReport / FeatureRequest / FeedbackReport model is created.
+3. Report is stored locally.
+4. If GitHub is configured, report is submitted as a GitHub Issue.
+5. Result is shown inline (green for success, red for error).
+6. GitHub submission errors are user-friendly (auth, rate limit, not found).
+
+---
+
+## Report Bug Page
+
+Fields:
+
+* Title
+* Description
+* Steps to Reproduce
+* Expected Behavior
+* Actual Behavior
+* Severity (low / medium / high / critical)
+
+---
+
+## Suggest Feature Page
+
+Fields:
+
+* Title
+* Description
+* Use Case
+* Priority (low / medium / high)
+
+---
+
+## General Feedback Page
+
+Fields:
+
+* Subject
+* Message
+* Category (general / praise / complaint)
+* Contact Permission (checkbox)
+
+---
+
+## Upcoming Updates Page
+
+Displays:
+
+* Feature title
+* Description
+* Version number
+* Published status
+
+Data sourced from SupportService (static roadmap, no GitHub integration yet).
 
 ---
 

@@ -1,0 +1,21 @@
+"AppState"
+{
+	"appid"		"730"
+	"name"		"Counter-Strike 2"
+	"installdir"		"Counter-Strike Global Offensive"
+	"LauncherPath"		"C:\Program Files (x86)\Steam\steam.exe"
+	"StateFlags"		"4"
+	"SizeOnDisk"		"34567890123"
+	"StagingSize"		"0"
+	"buildid"		"12345678"
+	"LastUpdated"		"1712345678"
+	"UserConfig"
+	{
+		"betakey"		""
+		"betaoptoutmessage"		""
+		"language"		"english"
+	}
+	"MountedConfig"
+	{
+	}
+}

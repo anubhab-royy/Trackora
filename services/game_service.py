@@ -22,6 +22,9 @@ class AddGameRequest:
     """Data transfer object for adding a game."""
     name: str
     executable_path: str
+    platform: str = ""
+    platform_id: str = ""
+    is_auto_discovered: bool = False
 
 
 @dataclass
@@ -121,6 +124,9 @@ class GameService:
                 name=name,
                 process_name=process_name,
                 executable_path=executable_path,
+                platform=request.platform,
+                platform_id=request.platform_id,
+                is_auto_discovered=request.is_auto_discovered,
             )
             game = self._repo.add(game)
             logger.info("Added game: %s (process: %s)", name, process_name)
@@ -219,6 +225,118 @@ class GameService:
             return GameServiceResult(
                 success=False, message="Failed to update tracking state."
             )
+
+    def import_discovered_games(self, candidates: list) -> GameServiceResult:
+        """
+        Bulk-import discovered game candidates.
+
+        Consolidation-aware duplicate prevention:
+        1. Skip by executable_path
+        2. Skip by (platform, platform_id)
+        3. If a legacy game (empty platform) matches by normalized name, update it
+           instead of creating a new record (prevents game consolidation duplicates)
+        4. Fall through to create new game
+
+        Returns:
+            GameServiceResult with imported/skipped counts.
+        """
+        if not candidates:
+            return GameServiceResult(success=False, message="No games to import.")
+
+        imported = 0
+        updated = 0
+        skipped = 0
+
+        existing_games = self._repo.get_all()
+
+        for candidate in candidates:
+            # 1. Skip duplicates by executable_path
+            existing = self._repo.get_by_executable_path(candidate.executable_path)
+            if existing is not None:
+                skipped += 1
+                continue
+
+            # 2. Skip duplicates by (platform, platform_id)
+            if candidate.platform and candidate.platform_id:
+                existing_platform = self._repo.get_by_platform_id(
+                    candidate.platform, candidate.platform_id
+                )
+                if existing_platform is not None:
+                    skipped += 1
+                    continue
+
+            # 3. Check for legacy game (no platform) with matching normalized name
+            legacy_match = self._find_legacy_by_normalized_name(
+                candidate.name, existing_games
+            )
+            if legacy_match is not None:
+                legacy_match.platform = candidate.platform
+                legacy_match.platform_id = candidate.platform_id
+                legacy_match.is_auto_discovered = True
+                self._repo.update(legacy_match)
+                updated += 1
+                logger.info(
+                    "Updated legacy game id=%d with discovered platform %s/%s",
+                    legacy_match.id, candidate.platform, candidate.platform_id,
+                )
+                continue
+
+            # 4. No match found — create new game
+            request = AddGameRequest(
+                name=candidate.name,
+                executable_path=candidate.executable_path,
+                platform=candidate.platform,
+                platform_id=candidate.platform_id,
+                is_auto_discovered=getattr(candidate, "is_auto_discovered", True),
+            )
+
+            result = self.add_game(request)
+            if result.success:
+                imported += 1
+            else:
+                skipped += 1
+
+        if imported > 0 or updated > 0:
+            parts = []
+            if imported > 0:
+                parts.append(f"{imported} game(s) imported")
+            if updated > 0:
+                parts.append(f"{updated} legacy game(s) updated")
+            if skipped > 0:
+                parts.append(f"{skipped} skipped (already exist)")
+            msg = ". ".join(parts) + "."
+            return GameServiceResult(success=True, message=msg)
+        else:
+            return GameServiceResult(
+                success=False,
+                message="No games were imported. All candidates already exist.",
+            )
+
+    @staticmethod
+    def _normalize_name(name: str) -> str:
+        """Strip trademark/symbol characters and lowercase for comparison."""
+        return (
+            name.replace("\u2122", "")
+            .replace("\u00AE", "")
+            .replace("\u00A9", "")
+            .strip()
+            .lower()
+        )
+
+    def _find_legacy_by_normalized_name(
+        self, name: str, existing_games: list[Game]
+    ) -> Game | None:
+        """
+        Find a legacy game (empty platform) whose normalized name matches.
+
+        Used to prevent creating a duplicate discovered record when a
+        manually-added game already exists with the same name.
+        """
+        norm = self._normalize_name(name)
+        for game in existing_games:
+            if not game.platform and self._normalize_name(game.name) == norm:
+                return game
+        return None
 
     # ------------------------------------------------------------------
     # Private helpers
