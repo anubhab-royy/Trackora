@@ -42,6 +42,7 @@ class SettingsView(QWidget):
 
     theme_toggled = pyqtSignal(bool)
     startup_toggled = pyqtSignal(bool)
+    auto_check_toggled = pyqtSignal(bool)
     export_csv_requested = pyqtSignal()
     export_json_requested = pyqtSignal()
     check_updates_requested = pyqtSignal()
@@ -56,6 +57,14 @@ class SettingsView(QWidget):
 
     def set_start_with_windows(self, enabled: bool) -> None:
         self._startup_check.setChecked(enabled)
+
+    def set_auto_check(self, enabled: bool) -> None:
+        """Set the 'Automatically check for updates' checkbox state."""
+        self._auto_check_checkbox.setChecked(enabled)
+
+    def set_latest_version(self, version: str) -> None:
+        """Update the 'Latest Version:' label (T-202)."""
+        self._latest_version_label.setText(version)
 
     def set_last_checked(self, iso_timestamp: str) -> None:
         self._last_checked_label.setText(iso_timestamp)
@@ -109,10 +118,25 @@ class SettingsView(QWidget):
         version_label.setTextInteractionFlags(version_label.textInteractionFlags())
         layout.addRow("Version:", version_label)
 
+        # T-202: Latest Version row — populated after background check
+        self._latest_version_label = QLabel("—")
+        self._latest_version_label.setObjectName("LatestVersionLabel")
+        self._latest_version_label.setTextInteractionFlags(
+            self._latest_version_label.textInteractionFlags()
+        )
+        layout.addRow("Latest Version:", self._latest_version_label)
+
         data_label = QLabel(str(BASE_DIR))
         data_label.setWordWrap(True)
         data_label.setTextInteractionFlags(data_label.textInteractionFlags())
         layout.addRow("Data Directory:", data_label)
+
+        # T-202: Auto-check toggle
+        self._auto_check_checkbox = QCheckBox("Automatically check for updates")
+        self._auto_check_checkbox.setObjectName("AutoCheckCheckbox")
+        self._auto_check_checkbox.setChecked(True)
+        self._auto_check_checkbox.toggled.connect(self.auto_check_toggled.emit)
+        layout.addRow("", self._auto_check_checkbox)
 
         self._check_updates_btn = QPushButton("Check for Updates")
         self._check_updates_btn.setObjectName("CheckUpdatesButton")

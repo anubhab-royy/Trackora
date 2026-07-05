@@ -1,11 +1,17 @@
 """
-StartupService — Phase 9
+StartupService — Phase 9 / T-201
 Manages automatic startup for Trackora.
 
 Windows: Uses HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run.
 Linux:   Uses $HOME/.config/autostart/*.desktop file (XDG spec).
 
 If the platform is not supported, all methods return False / no-op.
+
+Silent startup (T-201):
+    When Trackora registers itself for auto-start it appends the ``--silent``
+    flag to the launch command.  The entry point (trackora/__main__.py) reads
+    this flag and skips ``window.show()``, leaving only the tray icon visible
+    until the user clicks it.
 
 Architecture notes:
     - No UI. No SQL. No repository access.
@@ -48,14 +54,26 @@ def _get_app_path() -> str:
     """Return the path to the current executable.
 
     For a bundled app (PyInstaller) this returns sys.executable.
-    For development, returns the absolute path to the interpreter + main script.
+    For development, returns the absolute path to the interpreter.
     """
     exe = sys.executable
     # PyInstaller sets sys.frozen
     if hasattr(sys, "frozen") and sys.frozen:
         return str(Path(exe).resolve())
-    # Development: try to find main.py or a script entry point
+    # Development: return interpreter path
     return str(Path(exe).resolve())
+
+
+def _get_startup_command() -> str:
+    """Return the full command to register for OS auto-start.
+
+    Appends ``--silent`` so the application starts minimised to the tray
+    rather than showing the main window (T-201).
+
+    For a bundled (PyInstaller) build:  ``/path/to/Trackora.exe --silent``
+    For development:                    ``/path/to/python --silent``
+    """
+    return f"{_get_app_path()} --silent"
 
 
 class StartupService:
@@ -143,11 +161,12 @@ def _windows_is_registered() -> bool:
 def _windows_register() -> bool:
     try:
         import winreg
+        command = _get_startup_command()
         with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER, _REG_KEY, 0, winreg.KEY_SET_VALUE
         ) as key:
-            winreg.SetValueEx(key, _REG_VALUE, 0, winreg.REG_SZ, _get_app_path())
-        logger.info("Windows auto-start registered.")
+            winreg.SetValueEx(key, _REG_VALUE, 0, winreg.REG_SZ, command)
+        logger.info("Windows auto-start registered: %s", command)
         return True
     except (ImportError, OSError) as exc:
         logger.error("Failed to register Windows auto-start: %s", exc)
@@ -183,7 +202,7 @@ def _linux_register() -> bool:
     try:
         _AUTOSTART_DIR.mkdir(parents=True, exist_ok=True)
         content = _DESKTOP_FILE_TEMPLATE.format(
-            executable=_get_app_path(),
+            executable=_get_startup_command(),
             channel_suffix=_env_suffix(),
         )
         _DESKTOP_FILE.write_text(content, encoding="utf-8")

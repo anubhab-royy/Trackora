@@ -51,6 +51,7 @@ from services.support.support_service import SupportService
 from services.tray_service import TrayService
 from services.update_announcements_service import UpdateAnnouncementsService
 from services.update_center_service import UpdateCenterService
+from services.update_checker_thread import UpdateCheckerThread
 from tracker.tracking_state import TrackingState
 from trackora.core.build_info import BUILD_CHANNEL
 from trackora.core.environment import Environment
@@ -145,8 +146,9 @@ class MainWindow(QMainWindow):
         self._setup_tray()
         self._setup_auto_refresh()
 
-        # Non-blocking startup update check
-        QTimer.singleShot(5000, self._perform_startup_update_check)
+        # Non-blocking startup update check (T-202: off-thread)
+        self._update_thread: UpdateCheckerThread | None = None
+        QTimer.singleShot(5000, self._start_background_update_check)
 
         # Ensure clean shutdown even on OS shutdown
         app = QApplication.instance()
@@ -349,12 +351,26 @@ class MainWindow(QMainWindow):
         if app is not None:
             app.quit()
 
-    def _perform_startup_update_check(self) -> None:
-        """Check for updates at startup, non-blocking."""
+    def _start_background_update_check(self) -> None:
+        """Kick off a background update check that won't block the UI thread.
+
+        T-202: the network call runs inside UpdateCheckerThread.run() on a
+        worker thread.  Results are delivered via Qt signals.
+        """
         if not self._settings_repo.get_bool("update_auto_check_enabled", default=True):
             return
+        self._update_thread = UpdateCheckerThread(self._update_service)
+        self._update_thread.check_completed.connect(self._on_update_check_result)
+        self._update_thread.check_failed.connect(self._on_update_check_error)
+        self._update_thread.start()
+        logger.debug("Background update check started.")
+
+    def _on_update_check_result(self, result: object) -> None:
+        """Handle the result emitted by UpdateCheckerThread (UI thread)."""
+        from services.update_center_service import UpdateCheckResult
+        if not isinstance(result, UpdateCheckResult):
+            return
         try:
-            result = self._update_service.check_for_updates()
             if result.update_available and self._update_service.is_update_available():
                 assert result.release is not None
                 self._update_banner.show(
@@ -365,7 +381,11 @@ class MainWindow(QMainWindow):
                     f"Trackora {result.release.version} is ready to download",
                 )
         except Exception as exc:
-            logger.warning("Startup update check failed: %s", exc)
+            logger.warning("Startup update check result handling failed: %s", exc)
+
+    def _on_update_check_error(self, error: str) -> None:
+        """Log a background check failure without showing UI dialogs."""
+        logger.warning("Background update check failed: %s", error)
 
     def _on_update_banner_ignored(self, version: str) -> None:
         self._update_service.ignore_version(version)

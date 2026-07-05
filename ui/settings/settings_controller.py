@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 _SETTINGS_THEME = "dark_mode"
 _SETTINGS_STARTUP = "start_with_windows"
+_SETTINGS_AUTO_CHECK = "update_auto_check_enabled"
 
 
 class SettingsController:
@@ -55,6 +56,7 @@ class SettingsController:
     def _connect_signals(self) -> None:
         self._view.theme_toggled.connect(self._on_theme_toggled)
         self._view.startup_toggled.connect(self._on_startup_toggled)
+        self._view.auto_check_toggled.connect(self._on_auto_check_toggled)
         self._view.export_csv_requested.connect(self._on_export_csv)
         self._view.export_json_requested.connect(self._on_export_json)
         self._view.check_updates_requested.connect(self._on_check_updates)
@@ -63,8 +65,10 @@ class SettingsController:
     def _load_settings(self) -> None:
         is_dark = self._settings_repo.get_bool(_SETTINGS_THEME, default=True)
         with_startup = self._settings_repo.get_bool(_SETTINGS_STARTUP, default=False)
+        auto_check = self._settings_repo.get_bool(_SETTINGS_AUTO_CHECK, default=True)
         self._view.set_dark_mode(is_dark)
         self._view.set_start_with_windows(with_startup)
+        self._view.set_auto_check(auto_check)
 
     def _on_theme_toggled(self, dark_mode: bool) -> None:
         self._settings_repo.set_bool(_SETTINGS_THEME, dark_mode)
@@ -80,6 +84,10 @@ class SettingsController:
             StartupService.register()
         else:
             StartupService.unregister()
+
+    def _on_auto_check_toggled(self, enabled: bool) -> None:
+        """Persist the auto-check-for-updates preference (T-202)."""
+        self._settings_repo.set_bool(_SETTINGS_AUTO_CHECK, enabled)
 
     def _on_export_csv(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
@@ -121,6 +129,9 @@ class SettingsController:
         self._view.set_last_checked(
             result.checked_at.split(".")[0].replace("T", " ")
         )
+        # T-202: populate Latest Version label
+        if result.latest_version:
+            self._view.set_latest_version(result.latest_version)
         if result.update_available and result.release:
             self._view.set_update_status(
                 f"Trackora {result.release.version} available", True

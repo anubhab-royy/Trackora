@@ -58,6 +58,22 @@ from ui.themes.theme_manager import ThemeManager
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Silent-startup flag (T-201)
+# ---------------------------------------------------------------------------
+
+_SILENT_FLAG = "--silent"
+
+
+def _parse_silent_flag() -> bool:
+    """Return True if ``--silent`` is present in sys.argv.
+
+    When Trackora is registered for OS auto-start via :class:`StartupService`
+    it is launched with this flag so the main window is suppressed and only
+    the tray icon is shown.  The user can restore the window via the tray.
+    """
+    return _SILENT_FLAG in sys.argv
+
 _EXPECTED_GAME_COLUMNS: frozenset[str] = frozenset({
     "platform", "platform_id", "is_auto_discovered",
 })
@@ -330,7 +346,18 @@ def main() -> None:
     theme_manager.apply_theme(app, theme_manager.current_theme)
 
     process_monitor.start()
-    window.show()
+
+    # ── T-201: Silent Startup ─────────────────────────────────────────
+    # When launched by the OS on login (via StartupService) the --silent flag
+    # suppresses window.show() so Trackora starts hidden in the system tray.
+    start_minimized = _parse_silent_flag()
+    if start_minimized:
+        logger.info(
+            "Silent startup active — main window suppressed; tray icon only."
+        )
+    else:
+        window.show()
+    # ── End T-201 ────────────────────────────────────────────────────
 
     atexit.register(crash_service.mark_clean_shutdown)
     logger.info("Trackora started — database: %s", DATABASE_PATH)
