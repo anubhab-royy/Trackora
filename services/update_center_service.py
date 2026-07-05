@@ -93,7 +93,7 @@ class UpdateCenterService:
     def __init__(
         self,
         settings_repo: object | None = None,
-        repo: str = "anomalyco/trackora",
+        repo: str = "anubhab-royy/Trackora",
         cache_dir: Path | None = None,
     ) -> None:
         self._settings_repo = settings_repo

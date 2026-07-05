@@ -243,7 +243,7 @@ class MainWindow(QMainWindow):
 
         self._update_service = UpdateCenterService(
             settings_repo=self._settings_repo,
-            repo="anomalyco/trackora",
+            repo="anubhab-royy/Trackora",
         )
 
         self._settings_view = SettingsView(self)
