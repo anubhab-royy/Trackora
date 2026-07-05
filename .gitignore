@@ -25,6 +25,7 @@ build/
 
 # Installer output
 installer/Output/
+installer/version.iss
 
 # Runtime data
 logs/

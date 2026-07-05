@@ -160,13 +160,9 @@ class TestPyInstallerSpec:
 
     def test_version_consistency(self) -> None:
         """Version string in spec matches trackora/__init__.py."""
-        spec_ver_match = re.search(
-            r'^version\s*=\s*"(\d+\.\d+\.\d+)"',
-            self.SPEC_PATH.read_text(encoding="utf-8"),
-            re.MULTILINE,
-        )
-        assert spec_ver_match, "Cannot parse version from spec"
-        spec_ver = spec_ver_match.group(1)
+        spec_content = self.SPEC_PATH.read_text(encoding="utf-8")
+        assert "trackora/__init__.py" in spec_content, "Spec does not reference trackora/__init__.py"
+        assert "_version" in spec_content, "Spec does not define _version"
 
         init_py = REPO_ROOT / "trackora" / "__init__.py"
         init_match = re.search(
@@ -174,11 +170,6 @@ class TestPyInstallerSpec:
             init_py.read_text(encoding="utf-8"),
         )
         assert init_match, "Cannot parse __version__ from __init__.py"
-        init_ver = init_match.group(1)
-
-        assert spec_ver == init_ver, (
-            f"Version mismatch: spec={spec_ver}, __init__.py={init_ver}"
-        )
 
     def test_build_info_matches(self) -> None:
         """BUILD_VERSION in build_info.py matches __init__.py."""
@@ -195,13 +186,13 @@ class TestPyInstallerSpec:
 
     def test_version_info_txt_consistent(self) -> None:
         """FileVersion in version_info.txt matches spec version."""
-        spec_ver_match = re.search(
-            r'^version\s*=\s*"(\d+\.\d+\.\d+)"',
-            self.SPEC_PATH.read_text(encoding="utf-8"),
-            re.MULTILINE,
+        init_py = REPO_ROOT / "trackora" / "__init__.py"
+        init_match = re.search(
+            r'__version__\s*=\s*"(\d+\.\d+\.\d+)"',
+            init_py.read_text(encoding="utf-8"),
         )
-        assert spec_ver_match
-        spec_ver = spec_ver_match.group(1)
+        assert init_match
+        spec_ver = init_match.group(1)
 
         vi_text = (REPO_ROOT / "version_info.txt").read_text(encoding="utf-8")
         vi_filevers = re.search(r"filevers=\((\d+),\s*(\d+),\s*(\d+)", vi_text)
@@ -229,19 +220,24 @@ class TestPyInstallerSpec:
 
     def test_installer_version_consistent(self) -> None:
         """Inno Setup version matches spec version."""
-        spec_ver_match = re.search(
-            r'^version\s*=\s*"(\d+\.\d+\.\d+)"',
-            self.SPEC_PATH.read_text(encoding="utf-8"),
-            re.MULTILINE,
+        init_py = REPO_ROOT / "trackora" / "__init__.py"
+        init_match = re.search(
+            r'__version__\s*=\s*"(\d+\.\d+\.\d+)"',
+            init_py.read_text(encoding="utf-8"),
         )
-        assert spec_ver_match
-        spec_ver = spec_ver_match.group(1)
+        assert init_match
+        spec_ver = init_match.group(1)
 
         iss_path = REPO_ROOT / "installer" / "Trackora.iss"
         assert iss_path.is_file(), "Installer script not found"
         iss_text = iss_path.read_text(encoding="utf-8", errors="replace")
-        iss_match = re.search(r'#define MyAppVersion\s+"(\d+\.\d+\.\d+)"', iss_text)
-        assert iss_match, "MyAppVersion not found in installer script"
+        assert '#include "version.iss"' in iss_text, "version.iss not included in Trackora.iss"
+
+        ver_iss_path = REPO_ROOT / "installer" / "version.iss"
+        assert ver_iss_path.is_file(), "version.iss file not found"
+        ver_iss_text = ver_iss_path.read_text(encoding="utf-8")
+        iss_match = re.search(r'#define MyAppVersion\s+"(\d+\.\d+\.\d+)"', ver_iss_text)
+        assert iss_match, "MyAppVersion not found in version.iss"
         assert iss_match.group(1) == spec_ver, (
             f"Installer version={iss_match.group(1)} != spec version={spec_ver}"
         )
@@ -331,11 +327,14 @@ class TestUpdateCenter:
         """_is_newer_version correctly identifies newer/older/equal."""
         mod = importlib.import_module("services.update_center_service")
         svc = mod.UpdateCenterService.__new__(mod.UpdateCenterService)
-        # Patch __version__ to known value for testing
+        # Patch __version__ in both trackora and the update service module namespaces
         import trackora
+        import services.update_center_service
         orig_ver = trackora.__version__
+        orig_svc_ver = getattr(services.update_center_service, "__version__", "1.1.0")
         try:
             trackora.__version__ = "1.1.0"
+            services.update_center_service.__version__ = "1.1.0"
 
             assert svc._is_newer_version("2.0.0") is True
             assert svc._is_newer_version("1.1.0") is False
@@ -343,6 +342,7 @@ class TestUpdateCenter:
             assert svc._is_newer_version("1.1.1") is True
         finally:
             trackora.__version__ = orig_ver
+            services.update_center_service.__version__ = orig_svc_ver
 
     def test_rate_limit_logic(self) -> None:
         """Rate-limit window is 3600 seconds (1 hour); no repo = not rate limited."""

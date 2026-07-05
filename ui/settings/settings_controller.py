@@ -111,7 +111,7 @@ class SettingsController:
     def _on_check_updates(self) -> None:
         if self._update_service is None:
             return
-        result = self._update_service.check_for_updates()
+        result = self._update_service.check_for_updates(force=True)
         dialog = UpdateDialog(result, parent=self._parent_widget)
         dialog.exec()
         if dialog.ignored_version:
