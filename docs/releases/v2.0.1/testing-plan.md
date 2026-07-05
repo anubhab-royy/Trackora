@@ -97,3 +97,17 @@ Background monitoring overhead
 - No regression introduced.
 - Performance remains acceptable.
 - Upgrade path validated.
+
+---
+
+## Executed Tests Status (Milestone Audit)
+
+As of **July 6, 2026**:
+- **Background Update Checker Thread**: 17 unit tests verifying instantiation, concurrency, execution, and error handling.
+- **Auto-check Update Settings Controls**: 18 integration tests verifying toggle state propagation and settings persistence.
+- **Version Consistency Validator**: 6 tests verifying dynamic PyInstaller spec, Inno Setup `#include` outputs, and idempotency of script.
+- **Update Dialog Link Routing**: 9 tests asserting direct browser download links and correct QUrl packaging.
+- **Manual Bypass Cooldown checks**: 3 regression tests verifying rate-limiting logic.
+
+**Overall Test Results**: `124 / 124 passed successfully` (0 failures).
+

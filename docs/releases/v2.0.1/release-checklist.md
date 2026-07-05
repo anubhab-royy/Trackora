@@ -2,31 +2,31 @@
 
 ## Planning
 
-[ ] Scope frozen
+[x] Scope frozen
 
 [ ] Tickets completed
 
-[ ] Documentation updated
+[x] Documentation updated
 
 ---
 
 ## Development
 
-[ ] Code review complete
+[x] Code review complete
 
-[ ] Architecture review complete
+[x] Architecture review complete
 
-[ ] No layer violations
+[x] No layer violations
 
-[ ] Technical debt reviewed
+[x] Technical debt reviewed
 
 ---
 
 ## Testing
 
-[ ] Unit tests
+[x] Unit tests
 
-[ ] Integration tests
+[x] Integration tests
 
 [ ] UI tests
 
@@ -44,13 +44,13 @@
 
 ## Packaging
 
-[ ] Version updated
+[x] Version updated
 
-[ ] Changelog updated
+[x] Changelog updated
 
 [ ] Release notes completed
 
-[ ] PyInstaller build
+[x] PyInstaller build
 
 [ ] Inno Setup build
 

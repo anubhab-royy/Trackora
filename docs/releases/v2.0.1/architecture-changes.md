@@ -77,10 +77,23 @@ The following rules remain mandatory:
 
 ---
 
-## Expected Outcome
+## Implemented Changes in v2.0.1
 
-No architectural regressions.
+### 1. Silent Startup Architecture
+- **Trigger**: Trackora launched with the `--silent` argument.
+- **Workflow**: `__main__.py` intercepts arguments, sets a configuration flag, and constructs `MainWindow`. `MainWindow` starts in tray-only mode: the widget's `show()` is bypassed, keeping the interface hidden until the tray icon is activated.
 
-No layer violations.
+### 2. Off-Thread Update Checking
+- **Thread Class**: `UpdateCheckerThread(QThread)` in `services/update_checker_thread.py`.
+- **Purpose**: Prevents networking calls on the UI thread.
+- **Wiring**: Emits PyQT signals `check_completed(UpdateCheckResult)` and `check_failed(str)`. Wired up to `MainWindow` and `SettingsController` to update UI elements asynchronously.
 
-No breaking API changes.
+### 3. Dynamic Version Centralization
+- **Single Source of Truth**: `trackora/__init__.py`.
+- **Synchronization**: `scripts/bump_version.py` generates structural dependencies `version_info.txt` and `installer/version.iss` dynamically before PyInstaller/Inno Setup compilation.
+- **Validation**: Strict verification via `test_version_consistency.py` failing build if files fall out of sync.
+
+### 4. Direct Browser Link Handlers
+- **QUrl wrapping**: Wraps text strings in `QUrl` before invoking `QDesktopServices.openUrl` to prevent type mismatch crashes in PyQt6 bindings.
+- **Selection logic**: Dynamically reads GitHub release assets list, preferring direct `browser_download_url` for `.exe` setup files and falling back to `html_url`.
+
