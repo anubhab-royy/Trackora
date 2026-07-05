@@ -15,7 +15,7 @@
 
 #define MyAppName "Trackora"
 #define MyAppShortName "Trackora"
-#define MyAppVersion "2.0.0"
+#define MyAppVersion "2.0.1"
 #define MyAppPublisher "Trackora"
 #define MyAppURL "https://github.com/anomalyco/trackora"
 #define MyAppExeName "Trackora.exe"
