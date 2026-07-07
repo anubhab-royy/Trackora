@@ -165,14 +165,7 @@ def main() -> None:
         sys.exit(2)
 
     crash_service = CrashService(diagnostic_service=DiagnosticService())
-    crash_result = crash_service.check_for_crash()
-    if crash_result.has_crashed:
-        logger.warning(
-            "Previous session crashed — report %s saved to %s",
-            crash_result.report.report_id if crash_result.report else "unknown",
-            crash_result.report_path,
-        )
-    crash_service.mark_startup()
+    was_crash = crash_service.state_manager.detect_crash()
 
     if compat.status == "first_run":
         schema_version_manager.write(app_version)
@@ -302,11 +295,48 @@ def main() -> None:
         session_manager=session_manager,
     )
 
-    result = recovery.recover()
+    result = recovery.recover(was_crash=was_crash)
     if result.recovered_sessions:
         logger.info("Recovered %d orphaned session(s)", len(result.recovered_sessions))
     if result.discarded_count:
         logger.info("Discarded %d invalid session(s)", result.discarded_count)
+
+    active_sessions_data = []
+    if was_crash:
+        for s in result.recovered_sessions + result.discarded_sessions:
+            game_name = "Unknown Game"
+            try:
+                game = games_repo.get_by_id(s.game_id)
+                if game:
+                    game_name = game.name
+            except Exception:
+                pass
+            active_sessions_data.append({
+                "game_id": s.game_id,
+                "game_name": game_name,
+                "process_id": s.process_id,
+                "was_recovered": s.was_saved,
+                "duration_seconds": s.duration_seconds,
+                "discard_reason": s.discard_reason,
+            })
+
+    try:
+        tracked_count = len(games_repo.get_all_games())
+    except Exception:
+        tracked_count = 0
+
+    crash_result = crash_service.check_for_crash(
+        active_sessions=active_sessions_data,
+        tracked_games=tracked_count,
+        was_tracking=len(active_sessions_data) > 0,
+    )
+    if crash_result.has_crashed:
+        logger.warning(
+            "Previous session crashed — report %s saved to %s",
+            crash_result.report.report_id if crash_result.report else "unknown",
+            crash_result.report_path,
+        )
+    crash_service.mark_startup()
 
     theme_manager = ThemeManager()
 
@@ -322,6 +352,8 @@ def main() -> None:
         tracking_state=tracking_state,
         support_service=support_service,
         report_service=report_service,
+        crash_service=crash_service,
+        crash_result=crash_result,
     )
 
     def reload_tracked_games() -> None:
@@ -344,6 +376,71 @@ def main() -> None:
     sync_timer.start(10000)
 
     theme_manager.apply_theme(app, theme_manager.current_theme)
+
+    # ── T-204: Background Health Monitor Setup ──
+    from services.health.health_registry import HealthRegistry
+    from services.health.health_check import (
+        TrackingEngineHealthCheck,
+        SQLiteHealthCheck,
+        MongoDBHealthCheck,
+        UpdateServiceHealthCheck,
+        CrashServiceHealthCheck,
+        BackgroundWorkersHealthCheck,
+    )
+    from services.health.health_monitor import HealthMonitor
+
+    health_registry = HealthRegistry()
+    health_registry.register(TrackingEngineHealthCheck(process_monitor, tracking_state))
+    health_registry.register(SQLiteHealthCheck(conn))
+    health_registry.register(MongoDBHealthCheck(mongo))
+    health_registry.register(UpdateServiceHealthCheck(window._update_service, window))
+    health_registry.register(CrashServiceHealthCheck(crash_service, recovery))
+    health_registry.register(BackgroundWorkersHealthCheck(window))
+
+    health_monitor = HealthMonitor(health_registry)
+    health_monitor.notification_requested.connect(
+        lambda title, msg: window._tray.show_notification(title, msg)
+    )
+    health_monitor.start(30000)  # Check every 30 seconds
+    window._health_monitor = health_monitor
+    # ── End T-204 ──
+
+    # ── T-205: Database Backup Manager Setup ──
+    from services.backup.backup_manager import BackupManager as ServiceBackupManager
+    from services.backup.backup_service import BackupService
+    from services.backup.backup_scheduler import BackupScheduler
+
+    backup_manager = ServiceBackupManager(
+        schema_version_manager=schema_version_manager,
+    )
+    backup_service = BackupService(backup_manager)
+    backup_scheduler = BackupScheduler(
+        backup_manager=backup_manager,
+        settings_repo=settings_repo,
+        parent=window,
+    )
+    backup_scheduler.start(60000)  # Evaluate schedule policy every 60 seconds
+    window._backup_service = backup_service
+    window._backup_scheduler = backup_scheduler
+    # ── End T-205 ──
+
+    # ── T-206: Database Restore Manager Setup ──
+    from services.backup.restore_manager import RestoreManager
+    from services.backup.restore_service import RestoreService
+
+    restore_manager = RestoreManager(
+        backup_manager=backup_manager,
+        db_path=DATABASE_PATH,
+        repositories=[games_repo, sessions_repo, active_sessions_repo, settings_repo],
+        schema_version_manager=schema_version_manager,
+        process_monitor=process_monitor,
+        health_monitor=health_monitor,
+        backup_scheduler=backup_scheduler,
+        main_window=window,
+    )
+    restore_service = RestoreService(restore_manager)
+    window._restore_service = restore_service
+    # ── End T-206 ──
 
     process_monitor.start()
 

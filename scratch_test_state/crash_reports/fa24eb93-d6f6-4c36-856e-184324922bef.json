@@ -1,0 +1,13 @@
+{
+  "report_id": "fa24eb93-d6f6-4c36-856e-184324922bef",
+  "timestamp": "2026-07-06T19:23:33.594555+00:00",
+  "app_version": "2.0.1",
+  "os_version": "Windows-11-10.0.26200-SP0",
+  "os_platform": "Windows",
+  "active_sessions": [],
+  "tracked_games": 0,
+  "stack_trace": null,
+  "recent_log_entries": [],
+  "crash_type": "unexpected_shutdown",
+  "was_tracking": false
+}

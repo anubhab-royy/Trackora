@@ -145,6 +145,14 @@ class SupportService:
             self._serialize_feedback(feedback),
         )
 
+    def submit_crash_report(self, report: CrashReport) -> SupportSubmitResult:
+        """Store and submit a crash report."""
+        logger.info("Crash report processed: %s", report.report_id)
+        return self._submit_with_github_and_queue(
+            "submit_crash", report,
+            self._serialize_crash_report(report),
+        )
+
     def process_queue(self) -> object | None:
         """Process the offline report queue.
 
@@ -286,31 +294,19 @@ class SupportService:
         }
 
     @staticmethod
-    def _serialize_crash_report(
-        title: str,
-        body: str,
-        crash_type: str,
-        app_version: str,
-        os_version: str,
-        os_platform: str,
-        active_sessions: list,
-        tracked_games: int,
-        was_tracking: bool,
-        stack_trace: str | None,
-        recent_log_entries: list[str],
-    ) -> dict[str, object]:
+    def _serialize_crash_report(report: CrashReport) -> dict[str, object]:
         return {
-            "title": title,
-            "body": body,
-            "crash_type": crash_type,
-            "app_version": app_version,
-            "os_version": os_version,
-            "os_platform": os_platform,
-            "active_sessions": active_sessions,
-            "tracked_games": tracked_games,
-            "was_tracking": was_tracking,
-            "stack_trace": stack_trace,
-            "recent_log_entries": recent_log_entries,
+            "report_id": report.report_id,
+            "timestamp": report.timestamp,
+            "app_version": report.app_version,
+            "os_version": report.os_version,
+            "os_platform": report.os_platform,
+            "active_sessions": report.active_sessions,
+            "tracked_games": report.tracked_games,
+            "stack_trace": report.stack_trace,
+            "recent_log_entries": report.recent_log_entries,
+            "crash_type": report.crash_type,
+            "was_tracking": report.was_tracking,
         }
 
     @staticmethod

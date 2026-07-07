@@ -112,19 +112,52 @@ class MongoReportService(AbstractReportService):
 
     def _insert(self, report_type: ReportType, doc: dict[str, Any]) -> SubmitResult:
         if not self._connection.is_available:
+            logger.info("Diagnostics: connection not marked available, performing health_check()")
             self._connection.health_check()
             if not self._connection.is_available:
+                logger.error("Diagnostics: connection unavailable after health_check()")
                 return SubmitResult(
                     success=False,
                     error_message="MongoDB connection failed.",
                 )
-        if self._connection.database is None:
+        
+        try:
+            db = self._connection.database
+            if db is None:
+                logger.error("Diagnostics: self._connection.database returned None (database not configured)")
+                return SubmitResult(
+                    success=False,
+                    error_message="MongoDB not configured.",
+                )
+        except Exception as e:
+            import traceback
+            logger.error(
+                "Diagnostics: Exception accessing database property\n"
+                "Class: %s\n"
+                "Message: %s\n"
+                "Traceback:\n%s",
+                e.__class__.__name__,
+                e,
+                traceback.format_exc(),
+            )
             return SubmitResult(
                 success=False,
-                error_message="MongoDB not configured.",
+                error_message=f"MongoDB connection failed: {e}",
             )
 
-        self._ensure_indexes()
+        try:
+            self._ensure_indexes()
+        except Exception as e:
+            import traceback
+            logger.error(
+                "Diagnostics: Exception during index creation\n"
+                "Class: %s\n"
+                "Message: %s\n"
+                "Traceback:\n%s",
+                e.__class__.__name__,
+                e,
+                traceback.format_exc(),
+            )
 
         doc["schema_version"] = 1
         doc["app_version"] = __version__
@@ -134,7 +167,7 @@ class MongoReportService(AbstractReportService):
 
         collection_name = _COLLECTION_MAP[report_type]
         try:
-            result = self._connection.database[collection_name].insert_one(doc)
+            result = db[collection_name].insert_one(doc)
             report_id = str(result.inserted_id)
             logger.info(
                 "MongoDB report created: type=%s title=%r id=%s",
@@ -142,9 +175,15 @@ class MongoReportService(AbstractReportService):
             )
             return SubmitResult(success=True, report_id=report_id)
         except Exception as exc:
-            logger.exception(
-                "MongoDB insert failed: type=%s title=%r",
-                report_type.value, doc.get("title", ""),
+            import traceback
+            logger.error(
+                "Diagnostics: Exception during insert_one()\n"
+                "Class: %s\n"
+                "Message: %s\n"
+                "Traceback:\n%s",
+                exc.__class__.__name__,
+                exc,
+                traceback.format_exc(),
             )
             return SubmitResult(
                 success=False,

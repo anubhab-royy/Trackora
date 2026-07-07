@@ -479,6 +479,8 @@ def _install_mocks(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type:
     _mock_package(sys_mod, monkeypatch, "services.crash.crash_service", subpackages=None)
     _mock_package(sys_mod, monkeypatch, "services.crash.diagnostic_service", subpackages=None)
     _mock_package(sys_mod, monkeypatch, "services.support.report_queue_service", subpackages=None)
+    _mock_package(sys_mod, monkeypatch, "services.support.mongo_connection", subpackages=None)
+    _mock_package(sys_mod, monkeypatch, "services.support.mongo_report_service", subpackages=None)
     _mock_package(sys_mod, monkeypatch, "services.support.supabase_report_service", subpackages=None)
     _mock_package(sys_mod, monkeypatch, "services.support.support_service", subpackages=None)
     _mock_package(sys_mod, monkeypatch, "services.update_announcements_service", subpackages=None)
@@ -516,7 +518,7 @@ def _install_mocks(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type:
         "GamesRepository", "SessionsRepository",
         "ActiveSessionsRepository", "SettingsRepository",
         "GameService", "SessionHistoryService", "StatisticsService",
-        "PlaytimeCalculator", "ExportService", "SupabaseReportService",
+        "PlaytimeCalculator", "ExportService", "MongoConnection", "MongoReportService",
         "ReportQueueService", "UpdateAnnouncementsService", "SupportService",
         "LoggingService", "CrashService", "DiagnosticService",
         "ProcessMonitor", "RecoveryManager", "SessionManager",

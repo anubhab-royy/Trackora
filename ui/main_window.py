@@ -39,7 +39,7 @@ from database.repositories import (
     GamesRepository,
     SettingsRepository,
 )
-from services.crash.crash_service import CrashService
+from services.crash.crash_service import CrashResult, CrashService
 from services.crash.diagnostic_service import DiagnosticService
 from services.export_service import ExportService
 from services.game_service import GameService
@@ -100,6 +100,8 @@ class MainWindow(QMainWindow):
         support_service: SupportService | None = None,
         tracking_state: TrackingState | None = None,
         report_service: AbstractReportService | None = None,
+        crash_service: CrashService | None = None,
+        crash_result: CrashResult | None = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -114,21 +116,25 @@ class MainWindow(QMainWindow):
         self._tracking_state = tracking_state
 
         self._diagnostic_service = DiagnosticService()
-        self._crash_service = CrashService(self._diagnostic_service)
+        self._crash_service = crash_service or CrashService(self._diagnostic_service)
         self._report_service: AbstractReportService = (
             report_service or GitHubIssueService(self._settings_repo)
+        )
+        self._queue_service = (
+            support_service._queue_service if support_service is not None
+            else ReportQueueService()
         )
         self._announcements_service = UpdateAnnouncementsService(
             remote_url=self._get_announcements_url(),
         )
         self._support_service = support_service or SupportService(
             github_service=self._report_service,
-            queue_service=ReportQueueService(),
+            queue_service=self._queue_service,
             announcements_service=self._announcements_service,
         )
 
-        self._check_for_crashes()
-        self._crash_service.mark_startup()
+        if crash_result is not None and crash_result.has_crashed:
+            self._show_crash_dialog(crash_result)
 
         self._process_report_queue()
         self._queue_retry_timer = QTimer()
@@ -484,40 +490,18 @@ class MainWindow(QMainWindow):
     # Crash detection
     # ------------------------------------------------------------------
 
-    def _check_for_crashes(self) -> None:
-        """Check if the previous session crashed and prompt the user."""
+    def _show_crash_dialog(self, result: CrashResult) -> None:
+        """Prompt the user with the crash report dialog."""
         try:
-            active: list[dict[str, Any]] = []
-            tracked = 0
-            was_tracking = False
-            if self._tracking_state is not None:
-                for session in self._tracking_state.active_sessions.values():
-                    active.append({
-                        "game_id": session.game_id,
-                        "game_name": session.game_name,
-                        "process_id": session.process_id,
-                    })
-                tracked = len(self._tracking_state.tracked_games)
-                was_tracking = self._tracking_state.is_running
-
-            result = self._crash_service.check_for_crash(
-                active_sessions=active,
-                tracked_games=tracked,
-                was_tracking=was_tracking,
-            )
-            if not result.has_crashed:
-                return
-
             dialog = CrashDialog(
                 report=result.report,
                 report_path=result.report_path,
-                github_service=self._report_service,
-                queue_service=self._queue_service,
+                support_service=self._support_service,
                 parent=self,
             )
             dialog.exec()
         except Exception as exc:
-            logger.error("Crash check failed: %s", exc)
+            logger.error("Failed to display crash dialog: %s", exc)
 
     # ------------------------------------------------------------------
     # Announcements URL

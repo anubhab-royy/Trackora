@@ -6,6 +6,9 @@
 
 - [x] **T-201**: Silent Startup
 - [x] **T-202**: Startup Service Validation
+- [x] **T-204**: Background Health Monitor
+- [x] **T-205**: Database Backup Manager
+- [x] **T-206**: Database Restore Manager
 
 ### Update Center
 
@@ -23,9 +26,6 @@
 ### Reliability
 
 - [ ] **T-203**: Crash Recovery Improvements
-- [ ] **T-204**: Background Health Monitor
-- [ ] **T-205**: Database Backup Manager
-- [ ] **T-206**: Database Restore Manager
 
 ### Game Management
 

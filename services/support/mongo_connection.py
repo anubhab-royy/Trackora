@@ -69,8 +69,17 @@ class MongoConnection:
             db = client.get_default_database()
             if db is not None:
                 return db
-        except Exception:
-            pass
+        except Exception as e:
+            import traceback
+            logger.error(
+                "Diagnostics: Exception during get_default_database()\n"
+                "Class: %s\n"
+                "Message: %s\n"
+                "Traceback:\n%s",
+                e.__class__.__name__,
+                e,
+                traceback.format_exc(),
+            )
         if self._database_name:
             return client[self._database_name]
         return None
@@ -86,6 +95,7 @@ class MongoConnection:
         Credentials are redacted from all log output.
         """
         if not self._uri:
+            logger.error("Diagnostics: health_check failed because MONGODB_URI is empty/unset")
             return False
         try:
             client = self._get_or_create_client()
@@ -93,9 +103,18 @@ class MongoConnection:
             self._available = True
             logger.info("MongoDB: available")
             return True
-        except Exception:
+        except Exception as e:
+            import traceback
+            logger.error(
+                "Diagnostics: Exception during health_check() ping\n"
+                "Class: %s\n"
+                "Message: %s\n"
+                "Traceback:\n%s",
+                e.__class__.__name__,
+                e,
+                traceback.format_exc(),
+            )
             self._available = False
-            logger.exception("MongoDB: health check failed")
             return False
 
     # ------------------------------------------------------------------
@@ -123,8 +142,21 @@ class MongoConnection:
             return self._client
         with self._lock:
             if self._client is None:
-                self._client = MongoClient(
-                    self._uri,
-                    serverSelectionTimeoutMS=5000,
-                )
+                try:
+                    self._client = MongoClient(
+                        self._uri,
+                        serverSelectionTimeoutMS=5000,
+                    )
+                except Exception as e:
+                    import traceback
+                    logger.error(
+                        "Diagnostics: Exception during connection creation (MongoClient init)\n"
+                        "Class: %s\n"
+                        "Message: %s\n"
+                        "Traceback:\n%s",
+                        e.__class__.__name__,
+                        e,
+                        traceback.format_exc(),
+                    )
+                    raise
         return self._client
