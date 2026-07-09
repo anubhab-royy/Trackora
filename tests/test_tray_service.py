@@ -126,7 +126,6 @@ class TestTrayService:
         # Verify signals exist by checking they can be connected
         def dummy() -> None: pass
         tray.show_requested.connect(dummy)
-        tray.hide_requested.connect(dummy)
         tray.dashboard_requested.connect(dummy)
         tray.history_requested.connect(dummy)
         tray.quit_requested.connect(dummy)
@@ -192,7 +191,6 @@ class TestTrayService:
             tray.show()
 
             assert tray.show_action is not None
-            assert tray.hide_action is not None
             assert tray.dashboard_action is not None
             assert tray.history_action is not None
             assert tray.quit_action is not None

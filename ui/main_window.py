@@ -216,6 +216,9 @@ class MainWindow(QMainWindow):
         root.addWidget(content_frame, stretch=1)
 
     def _build_views(self) -> None:
+        # Register statistics refresh callback to automatically reload UI widgets (T-222)
+        self._statistics_service.register_refresh_callback(self._refresh_current_view)
+
         self._dash_ctrl = DashboardController(
             self._statistics_service, self._active_repo, self._games_repo
         )

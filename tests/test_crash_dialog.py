@@ -120,9 +120,13 @@ class TestSupportServiceCrashQueue:
 
     def test_is_retryable_returns_false_for_config_errors(self):
         assert _is_retryable("Not configured") is False
+        assert _is_retryable("Configuration Missing") is False
         assert _is_retryable("Authentication failed") is False
         assert _is_retryable("Not found") is False
         assert _is_retryable("Check your configuration") is False
+        assert _is_retryable("Permission Error") is False
+        assert _is_retryable("Not Authorized") is False
+        assert _is_retryable("Unauthorized") is False
 
     def test_is_retryable_returns_false_for_none(self):
         assert _is_retryable(None) is False

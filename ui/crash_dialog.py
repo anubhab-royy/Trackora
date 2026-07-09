@@ -56,7 +56,7 @@ class CrashDialog(QDialog):
         self._issue_url: str | None = None
         self._action_taken: str | None = None
 
-        self.setWindowTitle("Trackora — Unexpected Shutdown")
+        self.setWindowTitle("Unexpected Shutdown")
         self.setMinimumSize(520, 320)
         self.setModal(True)
         self._setup_ui()

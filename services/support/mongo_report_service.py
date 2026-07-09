@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import platform
+import traceback
 from datetime import UTC, datetime
 from typing import Any
 
@@ -26,6 +27,8 @@ from services.support.reporting_interface import (
 from trackora import __version__
 
 logger = logging.getLogger(__name__)
+
+SUBSYSTEM = "MongoDB"
 
 _COLLECTION_MAP: dict[ReportType, str] = {
     ReportType.BUG: "bug_reports",
@@ -112,33 +115,31 @@ class MongoReportService(AbstractReportService):
 
     def _insert(self, report_type: ReportType, doc: dict[str, Any]) -> SubmitResult:
         if not self._connection.is_available:
-            logger.info("Diagnostics: connection not marked available, performing health_check()")
+            logger.debug("[%s] Health check triggered", SUBSYSTEM)
             self._connection.health_check()
             if not self._connection.is_available:
-                logger.error("Diagnostics: connection unavailable after health_check()")
+                status = getattr(self._connection, "validation_status", None)
+                logger.error("[%s] Submit failed (ConnectionUnavailable: %s)", SUBSYSTEM, status.value if status else "Unknown")
+                msg = f"MongoDB connection failed: {status.value if status else 'Unknown Error'}."
                 return SubmitResult(
                     success=False,
-                    error_message="MongoDB connection failed.",
+                    error_message=msg,
                 )
         
         try:
             db = self._connection.database
             if db is None:
-                logger.error("Diagnostics: self._connection.database returned None (database not configured)")
+                status = getattr(self._connection, "validation_status", None)
+                logger.error("[%s] Submit failed (DatabaseNotConfigured: %s)", SUBSYSTEM, status.value if status else "Configuration Missing")
+                msg = f"MongoDB not configured: {status.value if status else 'Configuration Missing'}."
                 return SubmitResult(
                     success=False,
-                    error_message="MongoDB not configured.",
+                    error_message=msg,
                 )
         except Exception as e:
-            import traceback
             logger.error(
-                "Diagnostics: Exception accessing database property\n"
-                "Class: %s\n"
-                "Message: %s\n"
-                "Traceback:\n%s",
-                e.__class__.__name__,
-                e,
-                traceback.format_exc(),
+                "[%s] Submit failed (%s: %s)\n%s",
+                SUBSYSTEM, e.__class__.__name__, e, traceback.format_exc(),
             )
             return SubmitResult(
                 success=False,
@@ -148,15 +149,9 @@ class MongoReportService(AbstractReportService):
         try:
             self._ensure_indexes()
         except Exception as e:
-            import traceback
             logger.error(
-                "Diagnostics: Exception during index creation\n"
-                "Class: %s\n"
-                "Message: %s\n"
-                "Traceback:\n%s",
-                e.__class__.__name__,
-                e,
-                traceback.format_exc(),
+                "[%s] Index creation failed (%s: %s)\n%s",
+                SUBSYSTEM, e.__class__.__name__, e, traceback.format_exc(),
             )
 
         doc["schema_version"] = 1
@@ -170,20 +165,14 @@ class MongoReportService(AbstractReportService):
             result = db[collection_name].insert_one(doc)
             report_id = str(result.inserted_id)
             logger.info(
-                "MongoDB report created: type=%s title=%r id=%s",
-                report_type.value, doc.get("title", ""), report_id,
+                "[%s] Report submitted (type=%s id=%s)",
+                SUBSYSTEM, report_type.value, report_id,
             )
             return SubmitResult(success=True, report_id=report_id)
         except Exception as exc:
-            import traceback
             logger.error(
-                "Diagnostics: Exception during insert_one()\n"
-                "Class: %s\n"
-                "Message: %s\n"
-                "Traceback:\n%s",
-                exc.__class__.__name__,
-                exc,
-                traceback.format_exc(),
+                "[%s] Insert failed (%s: %s)\n%s",
+                SUBSYSTEM, exc.__class__.__name__, exc, traceback.format_exc(),
             )
             return SubmitResult(
                 success=False,
@@ -208,5 +197,5 @@ class MongoReportService(AbstractReportService):
             try:
                 db[name].create_indexes(indexes)
             except Exception:
-                logger.exception("Failed to create indexes on %s", name)
+                logger.exception("[%s] Index creation failed on %s", SUBSYSTEM, name)
         self._indexes_created = True

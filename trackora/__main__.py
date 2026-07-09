@@ -11,9 +11,11 @@ from __future__ import annotations
 import atexit
 import logging
 import os
+from pathlib import Path
 import sys
 
 from PyQt6.QtCore import QTimer
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from database.database_manager import DatabaseManager
@@ -27,11 +29,13 @@ from services.crash.crash_service import CrashService
 from services.crash.diagnostic_service import DiagnosticService
 from services.export_service import ExportService
 from services.game_service import GameService
+from services.delete_game_service import DeleteGameService
+from services.cache_cleanup_service import CacheCleanupService
 from services.logging_service import LoggingService
 from services.session_history_service import SessionHistoryService
 from services.startup_service import StartupService
 from services.support.report_queue_service import ReportQueueService
-from services.support.mongo_connection import MongoConnection
+from services.support.mongo_connection import MongoConnection, MongoValidationStatus
 from services.support.mongo_report_service import MongoReportService
 from services.support.support_service import SupportService
 from services.update_announcements_service import UpdateAnnouncementsService
@@ -127,6 +131,9 @@ def main() -> None:
 
     if not _acquire_lock():
         logger.warning("Another Trackora instance is already running.")
+        from trackora.core.single_instance import activate_existing_instance
+        if activate_existing_instance():
+            sys.exit(1)
         _app = QApplication(sys.argv)
         QMessageBox.warning(
             None, "Trackora",
@@ -140,6 +147,9 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("Trackora")
     app.setOrganizationName("Trackora")
+    _icon_path = Path(__file__).resolve().parent.parent / "ui" / "icons" / "app_icon.png"
+    if _icon_path.is_file():
+        app.setWindowIcon(QIcon(str(_icon_path)))
 
     ensure_dirs()
     db = DatabaseManager(str(DATABASE_PATH))
@@ -241,14 +251,31 @@ def main() -> None:
             )
     # ── End Upgrade Lifecycle ─────────────────────────────────────
 
+    tracking_state = TrackingState()
+
     games_repo = GamesRepository(conn)
     sessions_repo = SessionsRepository(conn)
     active_sessions_repo = ActiveSessionsRepository(conn)
     settings_repo = SettingsRepository(conn)
 
-    game_service = GameService(games_repo)
-    session_history_service = SessionHistoryService(sessions_repo, games_repo)
     statistics_service = StatisticsService(sessions_repo, games_repo)
+    cache_cleanup_service = CacheCleanupService()
+
+    delete_game_service = DeleteGameService(
+        games_repo=games_repo,
+        active_sessions_repo=active_sessions_repo,
+        sessions_repo=sessions_repo,
+        db_manager=db,
+        tracking_state=tracking_state,
+        statistics_service=statistics_service,
+        cache_cleanup_service=cache_cleanup_service,
+    )
+
+    game_service = GameService(
+        games_repository=games_repo,
+        delete_game_service=delete_game_service,
+    )
+    session_history_service = SessionHistoryService(sessions_repo, games_repo)
     PlaytimeCalculator(sessions_repo, games_repo)
     export_service = ExportService(sessions_repo, games_repo, settings_repo)
 
@@ -258,13 +285,22 @@ def main() -> None:
     mongo = MongoConnection(
         database_name=os.environ.get("MONGODB_DATABASE"),
     )
-    if mongo.health_check():
-        logger.info("MongoDB reporting: connected")
-    else:
-        logger.warning(
-            "MongoDB reporting: not available — "
-            "reports will be queued offline."
-        )
+    def on_startup_validation(status: MongoValidationStatus) -> None:
+        if status == MongoValidationStatus.CONNECTED:
+            logger.info("MongoDB reporting: connected")
+        else:
+            logger.warning(
+                "MongoDB reporting: not available — "
+                "reports will be queued offline. Status: %s",
+                status.value
+            )
+        try:
+            if health_monitor is not None:
+                health_monitor.run_checks()
+        except (NameError, UnboundLocalError):
+            pass
+
+    mongo.validate_async(on_startup_validation)
     report_service = MongoReportService(connection=mongo)
     queue_service = ReportQueueService()
     announcements_service = UpdateAnnouncementsService(
@@ -279,7 +315,6 @@ def main() -> None:
         announcements_service=announcements_service,
     )
 
-    tracking_state = TrackingState()
     session_manager = SessionManager(
         state=tracking_state,
         active_sessions_repo=active_sessions_repo,

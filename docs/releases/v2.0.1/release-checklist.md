@@ -4,7 +4,7 @@
 
 [x] Scope frozen
 
-[ ] Tickets completed
+[x] Tickets completed
 
 [x] Documentation updated
 
@@ -30,15 +30,15 @@
 
 [ ] UI tests
 
-[ ] Installer tests
+[x] Installer tests
 
-[ ] Upgrade tests
+[x] Upgrade tests
 
-[ ] Performance tests
+[x] Performance tests
 
-[ ] Backup tests
+[x] Backup tests
 
-[ ] MongoDB validation
+[x] MongoDB validation
 
 ---
 
@@ -48,13 +48,13 @@
 
 [x] Changelog updated
 
-[ ] Release notes completed
+[x] Release notes completed
 
 [x] PyInstaller build
 
-[ ] Inno Setup build
+[x] Inno Setup build
 
-[ ] Installer validation
+[x] Installer validation
 
 ---
 

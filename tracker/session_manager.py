@@ -179,6 +179,17 @@ class SessionManager:
         self._cleanup_active_session(session)
         return True
 
+    def update_active_sessions_heartbeat(self) -> None:
+        """Update the heartbeat timestamp for all active sessions in the database."""
+        now = datetime.now()
+        for session in list(self._state.active_sessions.values()):
+            try:
+                # Duck-type check or hasattr check for fake repos
+                if hasattr(self._active_sessions_repo, "update_heartbeat"):
+                    self._active_sessions_repo.update_heartbeat(session.active_session_id, now)
+            except Exception:
+                logger.exception("Failed to update heartbeat for active session id=%d", session.active_session_id)
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------

@@ -4,14 +4,13 @@ System tray icon and context menu for Trackora.
 
 Provides:
     - Tray icon with application icon
-    - Context menu: Show/Hide, Dashboard, History, Quit
+    - Context menu: Show, Dashboard, History, Quit
     - Minimize-to-tray behavior (connected by the application window)
     - Signals for main window integration
 
 Usage:
     tray = TrayService(parent_window)
     tray.show()
-    tray.hide_window_action.setVisible(False)  # after minimizing
 
 Requirements:
     - AC-012: System Tray
@@ -43,7 +42,6 @@ class TrayService(QObject):
 
     Signals:
         show_requested          — user clicked "Show" or double-clicked tray icon
-        hide_requested          — user clicked "Hide"
         dashboard_requested     — user clicked "Dashboard"
         history_requested       — user clicked "History"
         check_updates_requested — user clicked "Check for Updates"
@@ -55,7 +53,6 @@ class TrayService(QObject):
     """
 
     show_requested = pyqtSignal()
-    hide_requested = pyqtSignal()
     dashboard_requested = pyqtSignal()
     history_requested = pyqtSignal()
     check_updates_requested = pyqtSignal()
@@ -143,10 +140,6 @@ class TrayService(QObject):
         self.show_action = QAction("Show Trackora", menu)
         self.show_action.triggered.connect(self.show_requested.emit)
         menu.addAction(self.show_action)
-
-        self.hide_action = QAction("Hide", menu)
-        self.hide_action.triggered.connect(self.hide_requested.emit)
-        menu.addAction(self.hide_action)
 
         menu.addSeparator()
 

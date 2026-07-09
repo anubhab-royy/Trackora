@@ -276,6 +276,16 @@ QPushButton:pressed {{
     background-color: {p['border']};
 }}
 
+QPushButton:disabled {{
+    background-color: {p['bg_secondary']};
+    color: {p['text_muted']};
+}}
+
+QPushButton:focus {{
+    outline: 2px solid {p['accent']};
+    outline-offset: 2px;
+}}
+
 QPushButton#SecondaryButton {{
     background-color: {p['bg_secondary']};
     color: {p['text_primary']};
@@ -284,6 +294,199 @@ QPushButton#SecondaryButton {{
 
 QPushButton#SecondaryButton:hover {{
     background-color: {p['bg_card_hover']};
+}}
+
+QPushButton#SecondaryButton:disabled {{
+    background-color: {p['bg_secondary']};
+    color: {p['text_muted']};
+    border: 1px solid {p['bg_secondary']};
+}}
+
+/* Destructive / Delete button */
+#DeleteButton {{
+    background-color: transparent;
+    color: {p['error']};
+    border: 1px solid {p['error']};
+    font-weight: 600;
+}}
+
+#DeleteButton:hover {{
+    background-color: {p['error']};
+    color: {p['bg_primary']};
+}}
+
+#DeleteButton:disabled {{
+    background-color: transparent;
+    color: {p['text_muted']};
+    border: 1px solid {p['text_muted']};
+}}
+
+/* ------ Tables ------ */
+
+QTableView, QTableWidget {{
+    background-color: {p['bg_primary']};
+    alternate-background-color: {p['bg_secondary']};
+    color: {p['text_primary']};
+    gridline-color: {p['border']};
+    border: 1px solid {p['border']};
+    border-radius: 6px;
+    selection-background-color: {p['accent']};
+    selection-color: {p['bg_primary']};
+    outline: none;
+}}
+
+QTableView::item, QTableWidget::item {{
+    padding: 6px 12px;
+    color: {p['text_primary']};
+    background-color: transparent;
+    border: none;
+}}
+
+QTableView::item:hover, QTableWidget::item:hover {{
+    background-color: {p['bg_card_hover']};
+    color: {p['text_primary']};
+}}
+
+QTableView::item:selected, QTableWidget::item:selected {{
+    background-color: {p['accent']};
+    color: {p['bg_primary']};
+}}
+
+QTableView::item:selected:hover, QTableWidget::item:selected:hover {{
+    background-color: {p['accent_hover']};
+    color: {p['bg_primary']};
+}}
+
+QHeaderView {{
+    background-color: transparent;
+    border: none;
+}}
+
+QHeaderView::section {{
+    background-color: {p['bg_secondary']};
+    color: {p['text_secondary']};
+    padding: 8px 12px;
+    border: none;
+    border-bottom: 1px solid {p['border']};
+    border-right: 1px solid {p['border']};
+    font-weight: 600;
+    font-size: 12px;
+}}
+
+QHeaderView::section:last {{
+    border-right: none;
+}}
+
+QHeaderView::section:hover {{
+    background-color: {p['bg_card_hover']};
+    color: {p['text_primary']};
+}}
+
+QHeaderView::down-arrow {{
+    width: 10px;
+    height: 10px;
+}}
+
+QHeaderView::up-arrow {{
+    width: 10px;
+    height: 10px;
+}}
+
+/* ------ Input Fields ------ */
+
+QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDateEdit, QTimeEdit, QDateTimeEdit {{
+    background-color: {p['bg_card']};
+    color: {p['text_primary']};
+    border: 1px solid {p['border']};
+    border-radius: 6px;
+    padding: 6px 12px;
+    selection-background-color: {p['accent']};
+    selection-color: {p['bg_primary']};
+}}
+
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QDateEdit:focus, QTimeEdit:focus, QDateTimeEdit:focus {{
+    border: 1px solid {p['accent']};
+}}
+
+QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled {{
+    background-color: {p['bg_secondary']};
+    color: {p['text_muted']};
+}}
+
+QLineEdit[placeholderText], QTextEdit[placeholderText], QPlainTextEdit[placeholderText] {{
+    color: {p['text_muted']};
+}}
+
+/* ------ Combo Box ------ */
+
+QComboBox {{
+    background-color: {p['bg_card']};
+    color: {p['text_primary']};
+    border: 1px solid {p['border']};
+    border-radius: 6px;
+    padding: 6px 12px;
+}}
+
+QComboBox:hover {{
+    border: 1px solid {p['accent']};
+}}
+
+QComboBox:disabled {{
+    background-color: {p['bg_secondary']};
+    color: {p['text_muted']};
+}}
+
+QComboBox:focus {{
+    border: 1px solid {p['accent']};
+}}
+
+QComboBox::drop-down {{
+    border: none;
+    width: 30px;
+}}
+
+QComboBox::down-arrow {{
+    image: none;
+    width: 0px;
+}}
+
+QComboBox QAbstractItemView {{
+    background-color: {p['bg_card']};
+    color: {p['text_primary']};
+    selection-background-color: {p['accent']};
+    selection-color: {p['bg_primary']};
+    border: 1px solid {p['border']};
+    border-radius: 6px;
+    outline: none;
+}}
+
+/* ------ Check Box & Radio Button ------ */
+
+QCheckBox, QRadioButton {{
+    color: {p['text_primary']};
+    spacing: 8px;
+}}
+
+QCheckBox:disabled, QRadioButton:disabled {{
+    color: {p['text_muted']};
+}}
+
+/* ------ Group Box ------ */
+
+QGroupBox {{
+    background-color: {p['bg_card']};
+    border: 1px solid {p['border']};
+    border-radius: 10px;
+    margin-top: 16px;
+    padding: 16px;
+    font-weight: 600;
+}}
+
+QGroupBox::title {{
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 4px 12px;
+    color: {p['text_primary']};
 }}
 
 /* ------ Labels ------ */

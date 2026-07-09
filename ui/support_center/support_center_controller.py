@@ -9,15 +9,22 @@ from __future__ import annotations
 
 import logging
 
-from PyQt6.QtWidgets import QMessageBox
-
 from models.support.bug_report import BugReport
 from models.support.feature_request import FeatureRequest
 from models.support.feedback_report import FeedbackReport
-from services.support.support_service import SupportService
+from services.support.support_service import (
+    SupportService,
+    SupportSubmitResult,
+)
 from ui.support_center.support_center_widget import SupportCenterWidget
 
 logger = logging.getLogger(__name__)
+
+
+_RESULT_TYPE_SUCCESS = "success"
+_RESULT_TYPE_INFO = "info"
+_RESULT_TYPE_WARNING = "warning"
+_RESULT_TYPE_ERROR = "error"
 
 
 class SupportCenterController:
@@ -36,23 +43,25 @@ class SupportCenterController:
     ) -> None:
         self._view = view
         self._service = support_service
+        self._submitting_pages: set[str] = set()
         self._connect_signals()
-        self._load_upcoming_updates()
         logger.info("SupportCenterController initialised.")
 
     def _connect_signals(self) -> None:
         self._view.navigation_requested.connect(self._on_page_changed)
         self._view.submit_requested.connect(self._on_submit)
-        self._view.refresh_requested.connect(self._on_refresh)
 
     def _on_page_changed(self, page_key: str) -> None:
         logger.debug("Support page changed: %s", page_key)
         self._view.clear_submit_result(page_key)
-        if page_key == "upcoming_updates":
-            self._load_upcoming_updates()
 
     def _on_submit(self, page_key: str) -> None:
+        if page_key in self._submitting_pages:
+            logger.debug("Submission already in progress for %s, ignoring", page_key)
+            return
+
         logger.info("Submit requested for page: %s", page_key)
+        self._submitting_pages.add(page_key)
         self._view.set_submitting(page_key, True)
 
         try:
@@ -64,19 +73,22 @@ class SupportCenterController:
                 self._submit_feedback()
             else:
                 logger.warning("Unknown submit page: %s", page_key)
-        except Exception as exc:
-            logger.exception("Submission error on %s: %s", page_key, exc)
+        except Exception:
+            logger.exception("Unexpected submission error on %s", page_key)
             self._view.set_submit_result(
-                page_key, False, f"Error: {exc}"
+                page_key, _RESULT_TYPE_ERROR,
+                "An unexpected error occurred while submitting the report.",
             )
         finally:
+            self._submitting_pages.discard(page_key)
             self._view.set_submitting(page_key, False)
 
     def _submit_bug(self) -> None:
         data = self._view.get_bug_form_data()
         if not data["title"] or not data["description"]:
             self._view.set_submit_result(
-                "report_bug", False, "Title and description are required."
+                "report_bug", _RESULT_TYPE_WARNING,
+                "Title and description are required.",
             )
             return
         report = BugReport(
@@ -96,8 +108,8 @@ class SupportCenterController:
         data = self._view.get_feature_form_data()
         if not data["title"] or not data["description"]:
             self._view.set_submit_result(
-                "suggest_feature", False,
-                "Title and description are required."
+                "suggest_feature", _RESULT_TYPE_WARNING,
+                "Title and description are required.",
             )
             return
         request = FeatureRequest(
@@ -115,8 +127,8 @@ class SupportCenterController:
         data = self._view.get_feedback_form_data()
         if not data["subject"] or not data["message"]:
             self._view.set_submit_result(
-                "feedback", False,
-                "Subject and message are required."
+                "feedback", _RESULT_TYPE_WARNING,
+                "Subject and message are required.",
             )
             return
         feedback = FeedbackReport(
@@ -130,70 +142,85 @@ class SupportCenterController:
             self._view.clear_feedback_form()
         self._show_submit_result("feedback", result)
 
-    def _show_submit_result(
-        self, page_key: str, result: object
-    ) -> None:
-        local_stored = getattr(result, "local_stored", False)
-        backend_success = getattr(result, "github_success", False)
-        backend_url = getattr(result, "github_url", None)
-        backend_error = getattr(result, "github_error", None)
-        queued = getattr(result, "queued", False)
+    # ------------------------------------------------------------------
+    # Result Mapping
+    #
+    # Every possible SupportSubmitResult outcome maps to exactly one
+    # user-facing confirmation.  No ambiguous states, no silent failures.
+    #
+    # The UI consumes only the result object — no MongoDB exceptions,
+    # no QueueValidator internals, no retry logic inspection.
+    # ------------------------------------------------------------------
 
-        if not local_stored:
+    def _show_submit_result(
+        self, page_key: str, result: SupportSubmitResult
+    ) -> None:
+        # 1. Local storage failure — should never happen in practice,
+        #    but catches truly unexpected infrastructure errors.
+        if not result.local_stored:
             self._view.set_submit_result(
-                page_key, False, "Failed to save locally."
+                page_key, _RESULT_TYPE_ERROR,
+                "An unexpected error occurred while submitting the report.",
             )
             return
 
-        if backend_success and backend_url:
+        # 2. Backend accepted the report.
+        if result.github_success:
             self._view.set_submit_result(
-                page_key, True,
-                f"Report submitted successfully.\nTrack it at: {backend_url}",
+                page_key, _RESULT_TYPE_SUCCESS,
+                "Your report has been submitted successfully.",
             )
-        elif backend_success:
+            return
+
+        # 3. Backend failed but report was queued for offline retry.
+        if result.queued:
             self._view.set_submit_result(
-                page_key, True,
-                "Report submitted successfully.",
+                page_key, _RESULT_TYPE_INFO,
+                "No internet connection.\n\n"
+                "Your report has been saved locally and will be submitted "
+                "automatically when Trackora reconnects.",
             )
-        elif queued:
+            return
+
+        # 4. Permanent (non-retryable) backend failure — use the error
+        #    string from the result to pick a user-friendly message.
+        error = result.github_error or ""
+
+        err_lower = error.lower()
+
+        if "auth" in err_lower:
             self._view.set_submit_result(
-                page_key, True,
-                "Report saved locally and will be sent automatically.",
+                page_key, _RESULT_TYPE_WARNING,
+                "Trackora couldn't authenticate with the support service.",
             )
-        elif backend_error:
+        elif "config" in err_lower or "not configured" in err_lower:
             self._view.set_submit_result(
-                page_key, True,
-                f"Report saved locally.\n{backend_error}",
+                page_key, _RESULT_TYPE_WARNING,
+                "Trackora couldn't submit the report because the support "
+                "service configuration is invalid.",
+            )
+        elif "permission" in err_lower or "forbidden" in err_lower or "denied" in err_lower:
+            self._view.set_submit_result(
+                page_key, _RESULT_TYPE_WARNING,
+                "The report couldn't be submitted because access was denied.",
+            )
+        elif "invalid" in err_lower or "unsupported" in err_lower:
+            self._view.set_submit_result(
+                page_key, _RESULT_TYPE_WARNING,
+                "The report contains invalid information and couldn't be "
+                "submitted. Please review your input and try again.",
             )
         else:
+            # Unknown / unexpected error — safe generic fallback.
             self._view.set_submit_result(
-                page_key, True,
-                "Report saved locally and will be sent automatically.",
+                page_key, _RESULT_TYPE_ERROR,
+                "An unexpected error occurred while submitting the report.",
             )
-
-    def _load_upcoming_updates(self) -> None:
-        try:
-            announcements = self._service.get_announcements()
-            self._view.set_announcements(announcements)
-        except Exception as exc:
-            logger.error("Failed to load upcoming updates: %s", exc)
-
-    def _on_refresh(self) -> None:
-        """Force-refresh announcements from remote."""
-        self._view.set_refresh_enabled(False)
-        try:
-            announcements = self._service.refresh_announcements()
-            self._view.set_announcements(announcements)
-        except Exception as exc:
-            logger.warning("Refresh failed: %s", exc)
-        finally:
-            self._view.set_refresh_enabled(True)
 
     def navigate_to(self, page: str) -> None:
         """Programmatically navigate to a support page.
 
         Args:
-            page: One of 'report_bug', 'suggest_feature', 'feedback',
-                  'upcoming_updates'.
+            page: One of 'report_bug', 'suggest_feature', 'feedback'.
         """
         self._view.navigate_to(page)

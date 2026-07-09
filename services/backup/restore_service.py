@@ -5,6 +5,7 @@ restore_service.py — public-facing service for orchestrating database restores
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from pathlib import Path
 
 if TYPE_CHECKING:
     from services.backup.restore_manager import RestoreManager
@@ -30,3 +31,14 @@ class RestoreService:
             RestoreResult detailing the outcome of the restore operation.
         """
         return self._manager.restore(backup_id)
+
+    def restore_from_file(self, filepath: Path) -> RestoreResult:
+        """Trigger a safe database restore from the specified backup file (ZIP or JSON).
+
+        Args:
+            filepath: Path to the backup file to restore.
+
+        Returns:
+            RestoreResult detailing the outcome of the restore operation.
+        """
+        return self._manager.restore_from_file(filepath)

@@ -28,6 +28,8 @@ from services.support.reporting_interface import (
 
 logger = logging.getLogger(__name__)
 
+SUBSYSTEM = "GitHub"
+
 _API_TIMEOUT_SECONDS = 15
 
 _GITHUB_SETTINGS_TOKEN = "github_token"
@@ -120,7 +122,7 @@ class GitHubIssueService(AbstractReportService):
         try:
             return self._post_issue(config, payload)
         except URLError as exc:
-            logger.error("Network error posting GitHub issue: %s", exc)
+            logger.error("[%s] Submit failed (NetworkError: %s)", SUBSYSTEM, exc)
             return SubmitResult(
                 success=False,
                 error_message=(
@@ -129,7 +131,7 @@ class GitHubIssueService(AbstractReportService):
                 ),
             )
         except Exception as exc:
-            logger.exception("Unexpected error posting GitHub issue: %s", exc)
+            logger.exception("[%s] Submit failed (UnexpectedError: %s)", SUBSYSTEM, exc)
             return SubmitResult(
                 success=False,
                 error_message="An unexpected error occurred while submitting.",
@@ -156,8 +158,8 @@ class GitHubIssueService(AbstractReportService):
         cfg = GitHubConfig(token=token, repo_owner=owner, repo_name=repo)
         if not cfg.is_valid:
             logger.warning(
-                "GitHub config incomplete: token=%(t)r owner=%(o)r repo=%(r)r",
-                {"t": bool(token), "o": owner, "r": repo},
+                "[%s] Config incomplete (token=%s owner=%s repo=%s)",
+                SUBSYSTEM, bool(token), owner, repo,
             )
             return None
         return cfg
@@ -186,15 +188,16 @@ class GitHubIssueService(AbstractReportService):
                 response_body = json.loads(resp.read().decode("utf-8"))
                 issue_url: str | None = response_body.get("html_url")
                 logger.info(
-                    "GitHub issue created: %s (type=%s)",
-                    issue_url,
+                    "[%s] Issue created (type=%s url=%s)",
+                    SUBSYSTEM,
                     payload.get("labels", [""])[0],
+                    issue_url,
                 )
                 return IssueResult(success=True, issue_url=issue_url)
         except URLError as exc:
             return self._handle_http_error(exc)
         except json.JSONDecodeError as exc:
-            logger.error("Invalid JSON response from GitHub: %s", exc)
+            logger.error("[%s] Invalid JSON response (%s)", SUBSYSTEM, exc)
             return IssueResult(
                 success=False,
                 error_message="Received an invalid response from GitHub.",
@@ -204,35 +207,35 @@ class GitHubIssueService(AbstractReportService):
         """Interpret HTTP error codes into user-facing messages."""
         status = getattr(exc, "code", None)
         if status is None:
-            logger.error("GitHub connection error: %s", exc)
+            logger.error("[%s] Submit failed (ConnectionError: %s)", SUBSYSTEM, exc)
             return IssueResult(
                 success=False,
                 error_message="Could not connect to GitHub. Check your network.",
             )
 
         if status == 401:
-            logger.error("GitHub authentication failed (401)")
+            logger.error("[%s] Submit failed (AuthenticationFailed)", SUBSYSTEM)
             return IssueResult(
                 success=False,
                 error_message="GitHub authentication failed. "
                 "Check that your personal access token is valid.",
             )
         if status == 403:
-            logger.error("GitHub rate limit or forbidden (403)")
+            logger.error("[%s] Submit failed (Forbidden)", SUBSYSTEM)
             return IssueResult(
                 success=False,
                 error_message="GitHub rate limit reached or access denied. "
                 "Try again later.",
             )
         if status == 404:
-            logger.error("GitHub repo not found (404)")
+            logger.error("[%s] Submit failed (NotFound)", SUBSYSTEM)
             return IssueResult(
                 success=False,
                 error_message="GitHub repository not found. "
                 "Check your repo owner and name settings.",
             )
 
-        logger.error("GitHub API error HTTP %s: %s", status, exc)
+        logger.error("[%s] Submit failed (HTTP %s)", SUBSYSTEM, status)
         return IssueResult(
             success=False,
             error_message=f"GitHub API returned HTTP {status}. "

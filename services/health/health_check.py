@@ -147,6 +147,13 @@ class MongoDBHealthCheck(BaseHealthCheck):
                 {"configured": True, "initialized": False},
             )
 
+        if getattr(self._mongo, "is_pending", False) is True:
+            return HealthResult(
+                HealthStatus.HEALTHY,
+                "MongoDB connection validation pending...",
+                {"configured": True, "initialized": True, "pending": True},
+            )
+
         is_available = getattr(self._mongo, "is_available", False)
         auth_failed = getattr(self._mongo, "_auth_failed", False)
         last_error = getattr(self._mongo, "last_error", None)

@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from PyQt6.QtWidgets import QMessageBox, QWidget
+from PyQt6.QtWidgets import QMessageBox, QWidget, QDialog
 
 from database.models import Game
 from services.game_service import AddGameRequest, EditGameRequest, GameService
@@ -86,9 +86,9 @@ class GamesController:
 
         if result.success:
             self.load_games()
-            self._view.show_info("Game Added", result.message)
+            self._view.show_info("Add Game", result.message)
         else:
-            self._view.show_error("Add Game Failed", result.message)
+            self._view.show_error("Add Game", result.message)
 
     def _on_scan_requested(self) -> None:
         """Open Scan dialog and import selected games."""
@@ -129,10 +129,7 @@ class GamesController:
             logger.debug("Import result: success=%s, message=%s", result.success, result.message)
             self.load_games()
 
-            if result.success:
-                self._view.show_info("Scan Complete", result.message)
-            else:
-                self._view.show_info("Scan Complete", result.message)
+            self._view.show_info("Scan Complete", result.message)
         except Exception as exc:
             logger.exception("Import failed: %s", exc)
             self._view.show_error(
@@ -156,24 +153,22 @@ class GamesController:
 
         if result.success:
             self.load_games()
-            self._view.show_info("Game Updated", result.message)
+            self._view.show_info("Edit Game", result.message)
         else:
-            self._view.show_error("Edit Game Failed", result.message)
+            self._view.show_error("Edit Game", result.message)
 
     def _on_delete_requested(self, game: Game) -> None:
         """Ask for confirmation then delete the game."""
-        reply = QMessageBox.question(
-            self._view,
-            "Confirm Delete",
-            f'Are you sure you want to delete "{game.name}"?\n\n'
-            "This will remove the game from tracking. "
-            "Existing session history will not be deleted.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if reply != QMessageBox.StandardButton.Yes:
+        from ui.dialogs.delete_confirmation_dialog import DeleteConfirmationDialog
+
+        logger.info("Deletion confirmation shown")
+        dialog = DeleteConfirmationDialog(game.name, self._view)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            logger.info("Deletion cancelled")
             return
 
+        logger.info("Deletion confirmed")
         assert game.id is not None
         result = self._service.delete_game(game.id)
 

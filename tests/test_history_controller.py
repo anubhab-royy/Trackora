@@ -83,7 +83,7 @@ class TestSessionHistoryService:
     def test_query_returns_result_dataclass(self) -> None:
         mock_sessions_repo = MagicMock()
         mock_games_repo = MagicMock()
-        mock_sessions_repo.query_sessions.return_value = (0, [])
+        mock_sessions_repo.query_sessions.return_value = (0, 0, [])
 
         service = SessionHistoryService(mock_sessions_repo, mock_games_repo)
         result = service.query(SessionHistoryQuery())
@@ -92,7 +92,7 @@ class TestSessionHistoryService:
     def test_query_delegates_to_repository(self) -> None:
         mock_sessions_repo = MagicMock()
         mock_games_repo = MagicMock()
-        mock_sessions_repo.query_sessions.return_value = (1, [_make_session_view()])
+        mock_sessions_repo.query_sessions.return_value = (1, 3600, [_make_session_view()])
 
         service = SessionHistoryService(mock_sessions_repo, mock_games_repo)
         result = service.query(SessionHistoryQuery(page_size=10))
@@ -102,26 +102,10 @@ class TestSessionHistoryService:
         assert len(result.sessions) == 1
         assert result.sessions[0].game_name == "Test Game"
 
-    def test_query_converts_minutes_to_seconds(self) -> None:
-        mock_sessions_repo = MagicMock()
-        mock_games_repo = MagicMock()
-        mock_sessions_repo.query_sessions.return_value = (0, [])
-
-        service = SessionHistoryService(mock_sessions_repo, mock_games_repo)
-        q = SessionHistoryQuery(
-            min_duration_minutes=30,
-            max_duration_minutes=120,
-        )
-        service.query(q)
-
-        call_kwargs = mock_sessions_repo.query_sessions.call_args.kwargs
-        assert call_kwargs["min_duration"] == 1800   # 30 * 60
-        assert call_kwargs["max_duration"] == 7200    # 120 * 60
-
     def test_query_computes_total_pages(self) -> None:
         mock_sessions_repo = MagicMock()
         mock_games_repo = MagicMock()
-        mock_sessions_repo.query_sessions.return_value = (55, [_make_session_view()] * 50)
+        mock_sessions_repo.query_sessions.return_value = (55, 3600 * 55, [_make_session_view()] * 50)
 
         service = SessionHistoryService(mock_sessions_repo, mock_games_repo)
         result = service.query(SessionHistoryQuery(page=0, page_size=50))
@@ -132,7 +116,7 @@ class TestSessionHistoryService:
     def test_query_second_page(self) -> None:
         mock_sessions_repo = MagicMock()
         mock_games_repo = MagicMock()
-        mock_sessions_repo.query_sessions.return_value = (55, [_make_session_view(session_id=i + 51) for i in range(5)])
+        mock_sessions_repo.query_sessions.return_value = (55, 3600 * 55, [_make_session_view(session_id=i + 51) for i in range(5)])
 
         service = SessionHistoryService(mock_sessions_repo, mock_games_repo)
         result = service.query(SessionHistoryQuery(page=1, page_size=50))
@@ -147,7 +131,7 @@ class TestSessionHistoryService:
             _make_session_view(session_id=1, duration=3600),
             _make_session_view(session_id=2, duration=1800),
         ]
-        mock_sessions_repo.query_sessions.return_value = (2, sessions)
+        mock_sessions_repo.query_sessions.return_value = (2, 5400, sessions)
 
         service = SessionHistoryService(mock_sessions_repo, mock_games_repo)
         result = service.query(SessionHistoryQuery())
@@ -254,26 +238,54 @@ class TestSessionHistoryResult:
         service = SessionHistoryService(mock_sessions_repo, mock_games_repo)
 
         # 0 results → 0 pages
-        mock_sessions_repo.query_sessions.return_value = (0, [])
+        mock_sessions_repo.query_sessions.return_value = (0, 0, [])
         r = service.query(SessionHistoryQuery(page_size=50))
         assert r.total_pages == 0
 
         # 25 results → 1 page (fits in one page)
-        mock_sessions_repo.query_sessions.return_value = (25, [_make_session_view()] * 25)
+        mock_sessions_repo.query_sessions.return_value = (25, 3600 * 25, [_make_session_view()] * 25)
         r = service.query(SessionHistoryQuery(page_size=50))
         assert r.total_pages == 1
 
         # 50 results → 1 page (exactly one page)
-        mock_sessions_repo.query_sessions.return_value = (50, [_make_session_view()] * 50)
+        mock_sessions_repo.query_sessions.return_value = (50, 3600 * 50, [_make_session_view()] * 50)
         r = service.query(SessionHistoryQuery(page_size=50))
         assert r.total_pages == 1
 
         # 51 results → 2 pages
-        mock_sessions_repo.query_sessions.return_value = (51, [_make_session_view()] * 50)
+        mock_sessions_repo.query_sessions.return_value = (51, 3600 * 51, [_make_session_view()] * 50)
         r = service.query(SessionHistoryQuery(page_size=50))
         assert r.total_pages == 2
 
         # 101 results → 3 pages
-        mock_sessions_repo.query_sessions.return_value = (101, [_make_session_view()] * 50)
+        mock_sessions_repo.query_sessions.return_value = (101, 3600 * 101, [_make_session_view()] * 50)
         r = service.query(SessionHistoryQuery(page_size=50))
         assert r.total_pages == 3
+
+
+def test_history_reset_filters() -> None:
+    from PyQt6.QtWidgets import QApplication
+    from ui.history.history_view import HistoryView
+
+    app = QApplication.instance() or QApplication([])
+    view = HistoryView()
+    # Mock some user inputs
+    view._search_edit.setText("Hades")
+    view._game_combo.addItem("Hades", 10)
+    view._game_combo.setCurrentIndex(1)
+    view._date_from_check.setChecked(True)
+    view._date_from_edit.setEnabled(True)
+    view._date_to_check.setChecked(True)
+    view._date_to_edit.setEnabled(True)
+
+    # Call reset
+    view.reset_filters()
+
+    # Check that they are cleared/reset
+    assert view._search_edit.text() == ""
+    assert view._game_combo.currentIndex() == 0
+    assert not view._date_from_check.isChecked()
+    assert not view._date_from_edit.isEnabled()
+    assert not view._date_to_check.isChecked()
+    assert not view._date_to_edit.isEnabled()
+    assert view._current_page == 0

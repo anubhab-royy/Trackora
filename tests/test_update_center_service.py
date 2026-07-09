@@ -182,7 +182,7 @@ class TestVersionComparison:
         assert UpdateCenterService._is_newer_version("2.1.0")
 
     def test_patch_bump_is_newer(self) -> None:
-        assert UpdateCenterService._is_newer_version("2.0.1")
+        assert UpdateCenterService._is_newer_version("2.0.2")
 
     def test_same_version_not_newer(self) -> None:
         assert not UpdateCenterService._is_newer_version("2.0.0")

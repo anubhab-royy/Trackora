@@ -2,11 +2,10 @@
 SupportCenterWidget.
 
 Main view for the Support Center.
-Displays four sub-views switched by top navigation buttons:
+Displays three sub-views switched by top navigation buttons:
   - Report Bug
   - Suggest Feature
   - General Feedback
-  - Upcoming Updates
 """
 
 from __future__ import annotations
@@ -29,16 +28,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from services.update_announcements_service import AnnouncementsResult
-
 logger = logging.getLogger(__name__)
 
-_PAGES = ["report_bug", "suggest_feature", "feedback", "upcoming_updates"]
+_PAGES = ["report_bug", "suggest_feature", "feedback"]
 _PAGE_LABELS = {
     "report_bug": "Report Bug",
     "suggest_feature": "Suggest Feature",
     "feedback": "General Feedback",
-    "upcoming_updates": "Upcoming Updates",
 }
 
 
@@ -47,12 +43,10 @@ class SupportCenterWidget(QWidget):
 
     navigation_requested = pyqtSignal(str)
     submit_requested = pyqtSignal(str)
-    refresh_requested = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._nav_buttons: dict[str, QPushButton] = {}
-        self._updates_container: QVBoxLayout | None = None
         self._submit_buttons: dict[str, QPushButton] = {}
         self._status_labels: dict[str, QLabel] = {}
         self._setup_ui()
@@ -60,105 +54,6 @@ class SupportCenterWidget(QWidget):
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-
-    def set_upcoming_updates(self, updates: list[object]) -> None:
-        """Populate the Upcoming Updates page with update items.
-
-        Args:
-            updates: List of objects with .title, .description, .version, .is_published.
-                     Usually extracted from AnnouncementsResult.features.
-        """
-        if self._updates_container is None:
-            return
-        self._clear_layout(self._updates_container)
-        if not updates:
-            label = QLabel("No upcoming updates planned.")
-            label.setObjectName("EmptyStateLabel")
-            self._updates_container.addWidget(label)
-            return
-        for item in updates:
-            card = QFrame()
-            card.setObjectName("StatCard")
-            card.setFixedHeight(100)
-            card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(14, 10, 14, 10)
-            card_layout.setSpacing(4)
-
-            title = QLabel(item.title)
-            title.setStyleSheet("font-size: 15px; font-weight: 700;")
-            card_layout.addWidget(title)
-
-            desc = QLabel(item.description)
-            desc.setStyleSheet("font-size: 12px; color: #a6adc8;")
-            desc.setWordWrap(True)
-            card_layout.addWidget(desc)
-
-            version_label = QLabel(f"v{item.version}")
-            version_label.setStyleSheet("font-size: 11px; color: #6c7086;")
-            card_layout.addWidget(version_label)
-
-            self._updates_container.addWidget(card)
-
-    def set_announcements(self, announcements: AnnouncementsResult) -> None:
-        """Populate the Upcoming Updates page with version info + features.
-
-        Shows the current version, upcoming version, and a card for each
-        announced feature.
-        """
-        if self._updates_container is None:
-            return
-        self._clear_layout(self._updates_container)
-
-        # Version info
-        version_info = QLabel(
-            f"<b>Current version:</b> {announcements.current_version} &mdash; "
-            f"<b>Upcoming version:</b> {announcements.upcoming_version}"
-        )
-        version_info.setWordWrap(True)
-        version_info.setStyleSheet("font-size: 13px; color: #a6adc8; "
-                                   "padding: 0 0 8px 0;")
-        self._updates_container.addWidget(version_info)
-
-        source_label = QLabel(f"Source: {announcements.source}")
-        source_label.setStyleSheet("font-size: 11px; color: #6c7086; "
-                                   "padding: 0 0 4px 0;")
-        self._updates_container.addWidget(source_label)
-
-        # Features
-        features = announcements.features
-        if not features:
-            empty = QLabel("No upcoming features announced.")
-            empty.setObjectName("EmptyStateLabel")
-            self._updates_container.addWidget(empty)
-            return
-
-        for item in features:
-            card = QFrame()
-            card.setObjectName("StatCard")
-            card.setFixedHeight(100)
-            card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(14, 10, 14, 10)
-            card_layout.setSpacing(4)
-
-            title = QLabel(item.title)
-            title.setStyleSheet("font-size: 15px; font-weight: 700;")
-            card_layout.addWidget(title)
-
-            desc = QLabel(item.description)
-            desc.setStyleSheet("font-size: 12px; color: #a6adc8;")
-            desc.setWordWrap(True)
-            card_layout.addWidget(desc)
-
-            version_label = QLabel(f"v{item.version}")
-            version_label.setStyleSheet("font-size: 11px; color: #6c7086;")
-            card_layout.addWidget(version_label)
-
-            self._updates_container.addWidget(card)
-
-    def set_refresh_enabled(self, enabled: bool) -> None:
-        """Enable or disable the refresh button."""
-        if hasattr(self, "_refresh_btn") and self._refresh_btn is not None:
-            self._refresh_btn.setEnabled(enabled)
 
     def navigate_to(self, page_key: str) -> None:
         """Programmatically navigate to a support page."""
@@ -172,17 +67,43 @@ class SupportCenterWidget(QWidget):
             btn.setText("Submitting..." if submitting else "Submit")
 
     def set_submit_result(
-        self, page_key: str, success: bool, message: str
+        self, page_key: str, result_type: str, message: str
     ) -> None:
-        """Show submission result on the given page."""
+        """Show submission result on the given page.
+
+        Args:
+            page_key:   Page identifier.
+            result_type: One of ``"success"``, ``"info"``, ``"warning"``,
+                        ``"error"``.
+            message:    User-facing message.
+        """
         label = self._status_labels.get(page_key)
         if label is None:
             return
-        color = "#a6e3a1" if success else "#f38ba8"
+
+        icon_map = {
+            "success": "\u2713",   # ✓
+            "info": "\u2139",      # ℹ
+            "warning": "\u26A0",  # ⚠
+            "error": "\u2717",    # ✗
+        }
+        color_map = {
+            "success": "#a6e3a1",
+            "info": "#fab387",
+            "warning": "#f9e2af",
+            "error": "#f38ba8",
+        }
+
+        icon = icon_map.get(result_type, "")
+        color = color_map.get(result_type, "#f38ba8")
+        styled = f"{icon} {message}" if icon else message
+
         label.setStyleSheet(
             f"font-size: 12px; color: {color}; padding: 4px 0;"
+            f"font-weight: 600;"
         )
-        label.setText(message)
+        label.setWordWrap(True)
+        label.setText(styled)
 
     def clear_submit_result(self, page_key: str) -> None:
         """Clear the submission status message."""
@@ -294,7 +215,6 @@ class SupportCenterWidget(QWidget):
         self._stack.addWidget(self._build_report_bug_page())
         self._stack.addWidget(self._build_suggest_feature_page())
         self._stack.addWidget(self._build_feedback_page())
-        self._stack.addWidget(self._build_upcoming_updates_page())
 
         return self._stack
 
@@ -426,38 +346,6 @@ class SupportCenterWidget(QWidget):
 
         layout.addWidget(self._build_submit_section("feedback"))
         return page
-
-    def _build_upcoming_updates_page(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-
-        intro = QLabel("See what\u2019s coming next in Trackora.")
-        intro.setWordWrap(True)
-        intro.setStyleSheet("font-size: 13px; color: #6c7086;")
-        layout.addWidget(intro)
-
-        self._refresh_btn = QPushButton("Refresh")
-        self._refresh_btn.setObjectName("SecondaryButton")
-        self._refresh_btn.setFixedHeight(32)
-        self._refresh_btn.setMaximumWidth(120)
-        self._refresh_btn.clicked.connect(self._on_refresh)
-        layout.addWidget(self._refresh_btn)
-
-        self._updates_container = QVBoxLayout()
-        self._updates_container.setSpacing(10)
-        layout.addLayout(self._updates_container)
-
-        loading = QLabel("Loading upcoming updates...")
-        loading.setObjectName("EmptyStateLabel")
-        self._updates_container.addWidget(loading)
-
-        layout.addStretch()
-        return page
-
-    def _on_refresh(self) -> None:
-        self.refresh_requested.emit()
 
     def _build_submit_section(self, page_key: str) -> QWidget:
         section = QWidget()

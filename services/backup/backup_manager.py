@@ -69,7 +69,7 @@ class BackupManager:
                 )
 
             # Validate the newly created backup
-            logger.info("BackupManager: validating backup archive %s", core_res.backup_id)
+            logger.debug("BackupManager: validating backup archive %s", core_res.backup_id)
             is_valid, error_msg = BackupValidator.validate(core_res.backup_path)
 
             if not is_valid:
@@ -89,7 +89,7 @@ class BackupManager:
                     error=f"Backup validation failed: {error_msg}",
                 )
 
-            logger.info("BackupManager: validation successful for backup %s", core_res.backup_id)
+            logger.debug("BackupManager: validation successful for backup %s", core_res.backup_id)
 
             # Enforce retention if scheduled
             if backup_type == "scheduled":
@@ -121,13 +121,13 @@ class BackupManager:
 
     def enforce_retention(self) -> None:
         """Scheduled backups retention: keep latest 10, delete oldest."""
-        logger.info("BackupManager: enforcing scheduled backups retention policy.")
+        logger.debug("BackupManager: enforcing scheduled backups retention policy.")
         try:
             backups = self._core.list_backups(sort_by="created_at")
             scheduled_backups = [b for b in backups if b.backup_type == "scheduled"]
 
             if len(scheduled_backups) <= 10:
-                logger.info("BackupManager: scheduled backups count (%d) is within limit.", len(scheduled_backups))
+                logger.debug("BackupManager: scheduled backups count (%d) is within limit.", len(scheduled_backups))
                 return
 
             to_delete = scheduled_backups[10:]

@@ -52,7 +52,7 @@ class PlaytimeCalculator:
         Return aggregate statistics across ALL completed sessions.
         Satisfies AC-004.
         """
-        logger.info("Calculating lifetime statistics.")
+        logger.debug("Calculating lifetime statistics.")
 
         all_sessions = self._sessions.get_all()
 
@@ -135,7 +135,7 @@ class PlaytimeCalculator:
         if target_date is None:
             target_date = date.today()
 
-        logger.info("Calculating daily statistics for %s.", target_date)
+        logger.debug("Calculating daily statistics for %s.", target_date)
 
         sessions = self._sessions.get_by_date_range(
             start_date=target_date,
@@ -177,7 +177,7 @@ class PlaytimeCalculator:
         week_start = target_date - timedelta(days=target_date.weekday())
         week_end = week_start + timedelta(days=6)
 
-        logger.info(
+        logger.debug(
             "Calculating weekly statistics for week %s–%s.",
             week_start,
             week_end,
@@ -249,7 +249,7 @@ class PlaytimeCalculator:
         else:
             month_end = date(year, month + 1, 1) - timedelta(days=1)
 
-        logger.info(
+        logger.debug(
             "Calculating monthly statistics for %d-%02d.", year, month
         )
 

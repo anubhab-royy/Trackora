@@ -8,7 +8,9 @@ and queues failed submissions for retry via ReportQueueService.
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass, field
+from typing import Callable
 from uuid import uuid4
 
 from models.support.bug_report import BugReport
@@ -23,6 +25,13 @@ from services.update_announcements_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+SUBSYSTEM = "Support"
+
+
+def _cid() -> str:
+    """Generate a short correlation ID for workflow tracing."""
+    return uuid.uuid4().hex[:8]
 
 
 @dataclass
@@ -61,10 +70,14 @@ class SupportSubmitResult:
 # Errors that should NOT be queued for retry (configuration / permanent issues).
 _NON_RETRYABLE_KEYWORDS = [
     "not configured",
+    "configuration missing",
     "not available",
     "not found",
     "authentication failed",
     "permission denied",
+    "permission error",
+    "not authorized",
+    "unauthorized",
     "forbidden",
     "invalid",
     "bad request",
@@ -112,46 +125,65 @@ class SupportService:
 
         Returns SupportSubmitResult with local, GitHub, and queue status.
         """
+        correlation_id = _cid()
         report.id = str(uuid4())
         self._bug_reports.append(report)
-        logger.info("Bug report stored locally: %s", report.title)
+        logger.info("[%s][%s] Submission started (bug: %s)", SUBSYSTEM, correlation_id, report.title)
 
         return self._submit_with_github_and_queue(
             "submit_bug", report,
             self._serialize_bug_report(report),
+            correlation_id,
         )
 
     def submit_feature_request(
         self, request: FeatureRequest
     ) -> SupportSubmitResult:
         """Store and optionally submit a feature request."""
+        correlation_id = _cid()
         request.id = str(uuid4())
         self._feature_requests.append(request)
-        logger.info("Feature request stored locally: %s", request.title)
+        logger.info("[%s][%s] Submission started (feature: %s)", SUBSYSTEM, correlation_id, request.title)
 
         return self._submit_with_github_and_queue(
             "submit_feature", request,
             self._serialize_feature_request(request),
+            correlation_id,
         )
 
     def submit_feedback(self, feedback: FeedbackReport) -> SupportSubmitResult:
         """Store and optionally submit feedback."""
+        correlation_id = _cid()
         feedback.id = str(uuid4())
         self._feedback_reports.append(feedback)
-        logger.info("Feedback stored locally: %s", feedback.subject)
+        logger.info("[%s][%s] Submission started (feedback: %s)", SUBSYSTEM, correlation_id, feedback.subject)
 
         return self._submit_with_github_and_queue(
             "submit_feedback", feedback,
             self._serialize_feedback(feedback),
+            correlation_id,
         )
 
     def submit_crash_report(self, report: CrashReport) -> SupportSubmitResult:
         """Store and submit a crash report."""
-        logger.info("Crash report processed: %s", report.report_id)
+        correlation_id = _cid()
+        logger.info("[%s][%s] Crash submission started (id: %s)", SUBSYSTEM, correlation_id, report.report_id)
         return self._submit_with_github_and_queue(
             "submit_crash", report,
             self._serialize_crash_report(report),
+            correlation_id,
         )
+
+    def is_connection_available(self) -> bool:
+        """Return True if the remote report backend is validated and available."""
+        if self._github_service is None:
+            return True
+        conn = getattr(self._github_service, "connection", None)
+        if conn is None:
+            conn = getattr(self._github_service, "_connection", None)
+        if conn is None:
+            return True
+        return getattr(conn, "is_available", True)
 
     def process_queue(self) -> object | None:
         """Process the offline report queue.
@@ -160,8 +192,14 @@ class SupportService:
         or None if no queue service is configured.
         """
         if self._queue_service is None:
-            logger.info("No queue service configured, skipping queue processing.")
+            logger.info("[%s] Queue processing skipped (no queue service)", SUBSYSTEM)
             return None
+
+        # Check validation availability before executing pings
+        if not self.is_connection_available():
+            logger.info("[%s] Queue retry skipped (offline)", SUBSYSTEM)
+            return None
+
         return self._queue_service.process_queue(self._queue_submit_fn())
 
     # ------------------------------------------------------------------
@@ -172,19 +210,23 @@ class SupportService:
         self, github_method: str,
         model: object,
         serialized: dict[str, object],
+        correlation_id: str | None = None,
     ) -> SupportSubmitResult:
         github_success, github_url, github_error = self._try_github_submit(
-            github_method, model
+            github_method, model, correlation_id
         )
 
         queued = False
         queued_path = None
 
         if not github_success and _is_retryable(github_error):
-            result = self._try_queue_report(self._report_type(github_method), serialized)
+            result = self._try_queue_report(
+                self._report_type(github_method), serialized, correlation_id
+            )
             if result is not None:
                 queued = True
                 queued_path = str(result)
+                logger.info("[%s][%s] Report queued locally", SUBSYSTEM, correlation_id)
 
         return SupportSubmitResult(
             local_stored=True,
@@ -196,63 +238,104 @@ class SupportService:
         )
 
     def _try_github_submit(
-        self, method: str, model: object
+        self, method: str, model: object,
+        correlation_id: str | None = None,
     ) -> tuple[bool, str | None, str | None]:
         """Attempt to forward a submission to the backend.
 
         Returns (success, url, error_message).
         """
+        cid = f"[{correlation_id}]" if correlation_id else ""
         if self._github_service is None:
             return False, None, None
         try:
             method_fn = getattr(self._github_service, method, None)
             if method_fn is None:
-                logger.warning("GitHub service missing method: %s", method)
+                logger.warning("[%s]%s Backend method missing: %s", SUBSYSTEM, cid, method)
                 return False, None, None
             result = method_fn(model)
             if result.success:
-                logger.info("Report submitted to backend: %s", result.issue_url or "ok")
+                logger.info("[%s]%s Report submitted to backend", SUBSYSTEM, cid)
                 return True, result.issue_url, None
-            logger.warning("Backend submission failed: %s", result.error_message)
+            logger.warning("[%s]%s Backend submission failed: %s", SUBSYSTEM, cid, result.error_message)
             return False, None, result.error_message
         except Exception as exc:
-            logger.exception("Backend submission error: %s", exc)
+            logger.exception("[%s]%s Backend submission error (%s)", SUBSYSTEM, cid, exc)
             return False, None, str(exc)
 
     def _try_queue_report(
-        self, report_type: str, data: dict[str, object]
+        self, report_type: str, data: dict[str, object],
+        correlation_id: str | None = None,
     ) -> object | None:
         """Attempt to queue a report for offline retry."""
         if self._queue_service is None:
             return None
         try:
+            logger.info("[%s][%s] Queueing report (type=%s)", SUBSYSTEM, correlation_id, report_type)
             return self._queue_service.save_report(report_type, data)
         except Exception as exc:
-            logger.exception("Failed to queue report: %s", exc)
+            logger.exception("[%s][%s] Failed to queue report (%s)", SUBSYSTEM, correlation_id, exc)
             return None
 
-    def _queue_submit_fn(self):
+    def _queue_submit_fn(self) -> Callable[[str, dict], bool | str]:
         """Return a callable for QueueProcessService to submit queued reports."""
         github = self._github_service
 
-        def submit(report_type: str, data: dict) -> bool:
+        def submit(report_type: str, data: dict) -> bool | str:
             if github is None:
-                return False
+                logger.info("[%s] Queue discard (no backend)", SUBSYSTEM)
+                return "discard"
             method_name = _GITHUB_METHOD_MAP.get(report_type)
             if method_name is None:
-                return False
+                logger.info("[%s] Queue discard (unknown type: %s)", SUBSYSTEM, report_type)
+                return "discard"
             model = _reconstruct_model(report_type, data)
             if model is None:
-                return False
+                logger.info("[%s] Queue discard (reconstruct failed: %s)", SUBSYSTEM, report_type)
+                return "discard"
             try:
                 method_fn = getattr(github, method_name, None)
                 if method_fn is None:
-                    return False
+                    logger.info("[%s] Queue discard (method missing: %s)", SUBSYSTEM, method_name)
+                    return "discard"
                 result = method_fn(model)
-                return bool(result.success)
-            except Exception:
-                logger.exception("Error submitting queued %s report", report_type)
+                if result.success:
+                    logger.info("[%s] Queue retry succeeded (type=%s)", SUBSYSTEM, report_type)
+                    return True
+
+                # Classify the failure using validation status (from T-230)
+                conn = getattr(github, "connection", None)
+                if conn is None:
+                    conn = getattr(github, "_connection", None)
+
+                from services.support.mongo_connection import MongoValidationStatus
+                status = getattr(conn, "validation_status", None) if conn else None
+
+                # Non-retryable permanent configurations or auth errors
+                if status in (
+                    MongoValidationStatus.CONFIGURATION_MISSING,
+                    MongoValidationStatus.AUTHENTICATION_FAILED,
+                    MongoValidationStatus.PERMISSION_ERROR,
+                ):
+                    logger.info("[%s] Queue discard (permanent: %s)", SUBSYSTEM, status.value if status else "unknown")
+                    return "discard"
+
+                # Also inspect error message strings for payload validation restrictions
+                err_msg = (result.error_message or "").lower()
+                non_retryable_keywords = [
+                    "unauthorized", "unsupported", "invalid payload",
+                    "permission denied", "forbidden", "validation error",
+                ]
+                if any(kw in err_msg for kw in non_retryable_keywords):
+                    logger.info("[%s] Queue discard (validation error)", SUBSYSTEM)
+                    return "discard"
+
+                # Otherwise transient error (Timeout, DNS, Connection failure) -> retryable
+                logger.info("[%s] Queue retry deferred (transient)", SUBSYSTEM)
                 return False
+            except Exception as exc:
+                logger.warning("[%s] Queue retry error (%s: %s)", SUBSYSTEM, report_type, exc)
+                return "discard"
 
         return submit
 
@@ -360,7 +443,7 @@ class SupportService:
                 return self._announcements_service.get_announcements()
             except Exception as exc:
                 logger.warning(
-                    "Announcements service error: %s", exc
+                    "[%s] Announcements service error: %s", SUBSYSTEM, exc
                 )
 
         return AnnouncementsResult(
@@ -429,6 +512,6 @@ def _reconstruct_model(
         return cls(**data)
     except (TypeError, ValueError) as exc:
         logger.error(
-            "Failed to reconstruct %s model: %s", report_type, exc
+            "[%s] Model reconstruction failed (%s): %s", "Support", report_type, exc
         )
         return None

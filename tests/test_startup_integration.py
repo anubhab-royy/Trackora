@@ -471,9 +471,9 @@ def _install_mocks(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type:
     _mock_package(sys_mod, monkeypatch, "trackora_stats", subpackages=["playtime_calculator", "statistics_service"])
     _mock_package(sys_mod, monkeypatch, "tracker", subpackages=None)
     _mock_package(sys_mod, monkeypatch, "services", subpackages=[
-        "crash", "export_service", "game_service", "logging_service",
+        "crash", "export_service", "game_service", "delete_game_service", "cache_cleanup_service", "logging_service",
         "session_history_service", "startup_service", "support",
-        "update_announcements_service",
+        "update_announcements_service", "health", "backup",
     ])
     # Explicitly mock deep sub-modules of services.crash (needed by __main__ imports)
     _mock_package(sys_mod, monkeypatch, "services.crash.crash_service", subpackages=None)
@@ -484,17 +484,38 @@ def _install_mocks(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type:
     _mock_package(sys_mod, monkeypatch, "services.support.supabase_report_service", subpackages=None)
     _mock_package(sys_mod, monkeypatch, "services.support.support_service", subpackages=None)
     _mock_package(sys_mod, monkeypatch, "services.update_announcements_service", subpackages=None)
+    # Explicitly mock deep sub-modules of services.health and services.backup (needed by dynamic main imports)
+    _mock_package(sys_mod, monkeypatch, "services.health.health_registry", subpackages=None)
+    _mock_package(sys_mod, monkeypatch, "services.health.health_check", subpackages=None)
+    _mock_package(sys_mod, monkeypatch, "services.health.health_monitor", subpackages=None)
+    _mock_package(sys_mod, monkeypatch, "services.backup.backup_manager", subpackages=None)
+    _mock_package(sys_mod, monkeypatch, "services.backup.backup_service", subpackages=None)
+    _mock_package(sys_mod, monkeypatch, "services.backup.backup_scheduler", subpackages=None)
+    _mock_package(sys_mod, monkeypatch, "services.backup.restore_manager", subpackages=None)
+    _mock_package(sys_mod, monkeypatch, "services.backup.restore_service", subpackages=None)
     _mock_package(sys_mod, monkeypatch, "ui", subpackages=["main_window", "themes"])
     _mock_package(sys_mod, monkeypatch, "ui.themes.theme_manager", subpackages=None)
     _mock_package(sys_mod, monkeypatch, "database", subpackages=["database_manager", "repositories"])
 
     # ── Install specific overrides for critical types ──────────
     qt_w = sys_mod.modules["PyQt6.QtWidgets"]
-    qt_w.QApplication = MockQApplication  # type: ignore[attr-defined]
-    qt_w.QMessageBox = MockQMessageBox  # type: ignore[attr-defined]
+    monkeypatch.setattr(qt_w, "QApplication", MockQApplication)
+    monkeypatch.setattr(qt_w, "QMessageBox", MockQMessageBox)
 
     MockQMessageBox._last_title = None
     MockQMessageBox._last_text = None
+
+    # ── Force-override modules that __main__ imports locally ───
+    # These may be pre-imported by other tests in the session.
+    for _pkg in [
+        "services.backup.backup_scheduler",
+        "services.backup.backup_manager",
+        "services.backup.backup_service",
+        "services.backup.restore_manager",
+        "services.backup.restore_service",
+    ]:
+        if _pkg in sys_mod.modules:
+            monkeypatch.setitem(sys_mod.modules, _pkg, _make_qt_module(_pkg))
 
     # ── Now import __main__ (everything is already mocked) ─────
     import trackora.__main__ as main_mod
@@ -517,7 +538,7 @@ def _install_mocks(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type:
     for name in (
         "GamesRepository", "SessionsRepository",
         "ActiveSessionsRepository", "SettingsRepository",
-        "GameService", "SessionHistoryService", "StatisticsService",
+        "GameService", "DeleteGameService", "CacheCleanupService", "SessionHistoryService", "StatisticsService",
         "PlaytimeCalculator", "ExportService", "MongoConnection", "MongoReportService",
         "ReportQueueService", "UpdateAnnouncementsService", "SupportService",
         "LoggingService", "CrashService", "DiagnosticService",

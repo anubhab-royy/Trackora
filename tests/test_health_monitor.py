@@ -324,3 +324,51 @@ def test_health_monitor_logging_and_notifications() -> None:
     # Fourth check (transition FAILED -> HEALTHY)
     monitor.run_checks()
     assert len(listener.notifications) == 1  # No notification on healthy return, only log info
+
+
+def test_mongodb_pending_is_healthy() -> None:
+    from unittest.mock import PropertyMock
+    with patch.dict(os.environ, {"MONGODB_URI": "mongodb://localhost"}):
+        mock_conn = MagicMock()
+        type(mock_conn).is_pending = PropertyMock(return_value=True)
+        mock_conn.is_available = False
+        mock_conn._auth_failed = False
+
+        check = MongoDBHealthCheck(mock_conn)
+        result = check.check()
+        assert result.status == HealthStatus.HEALTHY
+        assert "pending" in result.message
+        assert result.details["pending"] is True
+
+
+def test_mongodb_transition_pending_to_warning_emits_notification() -> None:
+    from unittest.mock import PropertyMock
+    with patch.dict(os.environ, {"MONGODB_URI": "mongodb://localhost"}):
+        mock_conn = MagicMock()
+        is_pending_mock = PropertyMock(side_effect=[True, False, False])
+        type(mock_conn).is_pending = is_pending_mock
+        
+        is_available_mock = PropertyMock(side_effect=[False, False, False])
+        type(mock_conn).is_available = is_available_mock
+        
+        mock_conn._auth_failed = False
+        mock_conn.last_error = "Connection lost"
+
+        check = MongoDBHealthCheck(mock_conn)
+        registry = HealthRegistry()
+        registry.register(check)
+
+        monitor = HealthMonitor(registry)
+        listener = NotificationListener()
+        monitor.notification_requested.connect(listener.on_notification)
+
+        monitor.run_checks()
+        assert len(listener.notifications) == 0
+
+        monitor.run_checks()
+        assert len(listener.notifications) == 1
+        assert "offline" in listener.notifications[0][1]
+
+        monitor.run_checks()
+        assert len(listener.notifications) == 1
+

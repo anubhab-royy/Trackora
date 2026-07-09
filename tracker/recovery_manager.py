@@ -194,11 +194,19 @@ class RecoveryManager:
             active_session.start_time,
         )
 
-        # Ensure start_time is timezone-aware for safe arithmetic
+        # Ensure start_time and created_at are timezone-aware for safe arithmetic
         start_time = self._ensure_utc(active_session.start_time)
+        created_at = self._ensure_utc(active_session.created_at)
+
+        # Use created_at as the last known heartbeat of the session before the crash/shutdown
+        # Fall back to recovery_time if created_at is not greater than start_time (e.g. in tests/pre-heartbeat crash)
+        if created_at > start_time:
+            end_time = created_at
+        else:
+            end_time = recovery_time
 
         # Calculate duration
-        duration_seconds = self._calculate_duration(start_time, recovery_time)
+        duration_seconds = self._calculate_duration(start_time, end_time)
 
         # Discard sessions that are too short to be meaningful
         if duration_seconds < MINIMUM_SESSION_DURATION_SECONDS:
@@ -248,11 +256,11 @@ class RecoveryManager:
                 ),
             )
 
-        # Save the session to the sessions table
+        # Save the session to the sessions table using the last heartbeat as end_time
         saved_session_id = self._save_recovered_session(
             game_id=active_session.game_id,
             start_time=start_time,
-            end_time=recovery_time,
+            end_time=end_time,
             duration_seconds=duration_seconds,
         )
 

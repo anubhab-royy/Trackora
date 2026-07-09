@@ -1,24 +1,20 @@
 """
 ReportQueueService — offline report queue for Trackora.
 
-Saves support reports as JSON files when GitHub is unreachable.
-Processes the queue on application startup.
+Saves support reports as JSON files when MongoDB is unreachable.
+Processes the queue on application startup and background retries.
 
-Storage path: %APPDATA%/Trackora/pending_reports/ (Windows)
-Fallback:     ~/.local/share/Trackora/pending_reports/  (other platforms)
-
-Guarantees:
-- Atomic writes (write to .tmp, then rename to .json)
-- Crash-safe (partial .tmp files are cleaned on scan)
-- No duplication (UUID-based filenames)
-- Retry support (failed reports stay in queue)
+T-232: All queue files are validated by QueueValidator before entering the
+retry pipeline.  Corrupt / invalid files are moved to a quarantine directory
+(pending_reports/invalid/) for developer inspection rather than silently
+discarded or retried indefinitely.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import shutil
+import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,9 +25,12 @@ from models.support.bug_report import BugReport
 from models.support.feature_request import FeatureRequest
 from models.support.feedback_report import FeedbackReport
 from services.crash.diagnostic_service import CrashReport
+from services.support.queue_validator import QueueValidator
 from trackora.core.paths import BASE_DIR
 
 logger = logging.getLogger(__name__)
+
+SUBSYSTEM = "Queue"
 
 _REPORT_TYPE_MAP: dict[str, type] = {
     "bug": BugReport,
@@ -76,10 +75,22 @@ class ReportQueueService:
         self._storage_dir = Path(storage_dir) if storage_dir else _default_storage_dir()
         self._storage_dir.mkdir(parents=True, exist_ok=True)
         self._clean_orphaned_tmp_files()
+
+        # T-231: Concurrency and interruption controls
+        self._processing_lock = threading.Lock()
+        self._interrupted = False
+
+        # T-232: Validator for queue integrity checking
+        self._validator = QueueValidator(self._storage_dir)
+
         logger.info(
-            "ReportQueueService initialised (storage=%s).",
-            self._storage_dir,
+            "[%s] Queue initialised (storage=%s)",
+            SUBSYSTEM, self._storage_dir,
         )
+
+    def stop_processing(self) -> None:
+        """Interrupts currently running process_queue loop."""
+        self._interrupted = True
 
     # ------------------------------------------------------------------
     # Public API
@@ -91,13 +102,15 @@ class ReportQueueService:
         """Save a report to the queue atomically.
 
         Args:
-            report_type: One of 'bug', 'feature', 'feedback'.
+            report_type: One of 'bug', 'feature', 'feedback', 'crash'.
             data: Dictionary of model fields.
 
         Returns:
             Path to the saved JSON file.
         """
-        filename = f"{uuid4()}.json"
+        # Prefix the filename with a high-resolution UTC timestamp to guarantee chronological sorting order
+        timestamp_prefix = datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")
+        filename = f"{timestamp_prefix}_{uuid4()}.json"
         tmp_path = self._storage_dir / f"{filename}.tmp"
         final_path = self._storage_dir / filename
 
@@ -114,111 +127,133 @@ class ReportQueueService:
             )
             tmp_path.replace(final_path)
             logger.info(
-                "Report queued: %s (%s)", final_path.name, report_type
+                "[%s] Report saved to queue (%s, type=%s)", SUBSYSTEM, final_path.name, report_type
             )
             return final_path
         except OSError as exc:
-            logger.error("Failed to queue report: %s", exc)
+            logger.error("[%s] Queue save failed (%s)", SUBSYSTEM, exc)
             if tmp_path.exists():
                 tmp_path.unlink(missing_ok=True)
             raise
 
     def process_queue(
-        self, submit_fn: Callable[[str, dict], bool]
+        self, submit_fn: Callable[[str, dict], bool | str]
     ) -> QueueProcessResult:
         """Process all pending reports in the queue.
 
-        For each JSON file:
-        1. Load and validate the payload.
-        2. Call submit_fn(report_type, data).
-        3. If submit_fn returns True, delete the file.
-        4. If submit_fn returns False, keep the file for next retry.
+        T-232 validation gate:
+            1. All queue files are validated by QueueValidator.
+            2. Invalid files are quarantined (moved to invalid/ subdir).
+            3. Only validated files reach the retry pipeline.
 
-        Args:
-            submit_fn: Callable accepting (report_type, data_dict)
-                       and returning True on success.
-
-        Returns:
-            QueueProcessResult with counts and errors.
+        For each valid file:
+            - Call submit_fn(report_type, data).
+            - True  → delete (submitted successfully).
+            - False → retain (transient failure, retry later).
+            - 'discard' → delete (permanent failure).
         """
+        correlation_id = uuid4().hex[:8]
+
+        # Ensure single concurrent retry worker only
+        acquired = self._processing_lock.acquire(blocking=False)
+        if not acquired:
+            logger.warning("[%s][%s] Queue processing already in progress. Skipping.", SUBSYSTEM, correlation_id)
+            return QueueProcessResult()
+
+        self._interrupted = False
         result = QueueProcessResult()
-        json_files = sorted(self._storage_dir.glob("*.json"))
+
+        # Glob files and sort alphabetically (chronological timestamp prefix ensures chronological order)
+        # Exclude the invalid/ quarantine subdirectory
+        json_files = sorted(
+            f for f in self._storage_dir.glob("*.json")
+            if f.parent == self._storage_dir
+        )
 
         if not json_files:
-            logger.info("No pending reports to process.")
+            logger.debug("[%s][%s] Queue empty, nothing to process", SUBSYSTEM, correlation_id)
+            self._processing_lock.release()
             return result
 
-        logger.info(
-            "Processing %d pending report(s)...", len(json_files)
-        )
+        logger.info("[%s][%s] Queue processing started (%d file(s))", SUBSYSTEM, correlation_id, len(json_files))
 
-        for filepath in json_files:
-            result.attempted += 1
-            try:
-                payload = json.loads(filepath.read_text(encoding="utf-8"))
-                report_type = payload.get("type", "")
-                data = payload.get("data", {})
+        try:
+            # ── T-232: Validate all files before retry pipeline ──────────
+            summary = self._validator.validate_all(json_files)
 
-                if report_type not in _REPORT_TYPE_MAP:
-                    logger.warning(
-                        "Unknown report type in %s: %r",
-                        filepath.name,
-                        report_type,
-                    )
-                    result.failed += 1
-                    result.errors.append(
-                        f"{filepath.name}: unknown type '{report_type}'"
-                    )
-                    continue
-
-                success = submit_fn(report_type, data)
-                if success:
-                    filepath.unlink()
-                    result.succeeded += 1
-                    logger.info(
-                        "Queued report submitted and removed: %s",
-                        filepath.name,
-                    )
-                else:
-                    result.failed += 1
-                    error_msg = f"{filepath.name}: submission failed (will retry)"
-                    result.errors.append(error_msg)
-                    logger.warning(
-                        "Queued report submission failed, keeping: %s",
-                        filepath.name,
-                    )
-            except json.JSONDecodeError as exc:
-                logger.error(
-                    "Invalid JSON in %s: %s", filepath.name, exc
-                )
+            # Account for quarantined files in result counters
+            for inv in summary.invalid:
+                result.attempted += 1
                 result.failed += 1
-                result.errors.append(f"{filepath.name}: invalid JSON")
-            except OSError as exc:
-                logger.error(
-                    "Error reading %s: %s", filepath.name, exc
-                )
-                result.failed += 1
-                result.errors.append(f"{filepath.name}: {exc}")
+                result.errors.append(f"{inv.path.name}: {inv.reason}")
 
-        logger.info(
-            "Queue processing complete: %d attempted, "
-            "%d succeeded, %d failed.",
-            result.attempted,
-            result.succeeded,
-            result.failed,
-        )
+            logger.info(
+                "[%s][%s] Processing %d valid report(s) (skipped %d invalid)",
+                SUBSYSTEM, correlation_id, summary.valid_count, summary.invalid_count,
+            )
+
+            # ── Retry pipeline: only valid reports reach here ─────────────
+            for vr in summary.valid:
+                if self._interrupted:
+                    logger.info("[%s][%s] Queue processing interrupted", SUBSYSTEM, correlation_id)
+                    break
+
+                filepath = vr.path
+                report_type = vr.report_type
+                data = vr.data
+                result.attempted += 1
+
+                try:
+                    outcome = submit_fn(report_type, data)
+
+                    if outcome is True or outcome == "success":
+                        filepath.unlink(missing_ok=True)
+                        result.succeeded += 1
+                        logger.info("[%s][%s] Queue retry succeeded (%s)", SUBSYSTEM, correlation_id, filepath.name)
+                    elif outcome == "discard" or outcome == "permanent":
+                        filepath.unlink(missing_ok=True)
+                        result.failed += 1
+                        result.errors.append(f"{filepath.name}: permanent failure")
+                        logger.info("[%s][%s] Queue discard permanent (%s)", SUBSYSTEM, correlation_id, filepath.name)
+                    else:
+                        # Retain in queue for retry later
+                        result.failed += 1
+                        result.errors.append(f"{filepath.name}: retryable failure")
+                        logger.info("[%s][%s] Queue retry deferred (%s)", SUBSYSTEM, correlation_id, filepath.name)
+
+                except OSError as exc:
+                    logger.error("[%s][%s] Queue processing error (%s: %s)", SUBSYSTEM, correlation_id, filepath.name, exc)
+                    result.failed += 1
+                    result.errors.append(f"{filepath.name}: {exc}")
+
+            logger.info("[%s][%s] Queue processing completed (%d succeeded, %d failed)", SUBSYSTEM, correlation_id, result.succeeded, result.failed)
+        finally:
+            self._processing_lock.release()
+
         return result
 
     def count_pending(self) -> int:
-        """Return the number of JSON files currently in the queue."""
-        return len(list(self._storage_dir.glob("*.json")))
+        """Return the number of valid JSON files in the main queue (excludes invalid/)."""
+        return len([
+            f for f in self._storage_dir.glob("*.json")
+            if f.parent == self._storage_dir
+        ])
+
+    def count_quarantined(self) -> int:
+        """Return the number of files currently in the quarantine directory."""
+        return len(list(self._validator.quarantine_dir.glob("*")))
+
+    def get_quarantine_dir(self) -> Path:
+        """Return the quarantine directory path."""
+        return self._validator.quarantine_dir
 
     def clear_all(self) -> None:
         """Remove all queued reports (for testing / manual purge)."""
         for f in self._storage_dir.glob("*.json"):
-            f.unlink()
+            if f.parent == self._storage_dir:
+                f.unlink()
         self._clean_orphaned_tmp_files()
-        logger.info("All queued reports cleared.")
+        logger.info("[%s] All queued reports cleared", SUBSYSTEM)
 
     def get_storage_dir(self) -> Path:
         """Return the storage directory path."""
@@ -238,7 +273,7 @@ class ReportQueueService:
             except OSError:
                 pass
         if cleaned:
-            logger.info("Cleaned %d orphaned .tmp file(s).", cleaned)
+            logger.info("[%s] Cleaned %d orphaned .tmp file(s)", SUBSYSTEM, cleaned)
 
     # ------------------------------------------------------------------
     # Static helpers for model reconstruction
@@ -247,7 +282,7 @@ class ReportQueueService:
     @staticmethod
     def reconstruct_model(
         report_type: str, data: dict
-    ) -> BugReport | FeatureRequest | FeedbackReport | None:
+    ) -> BugReport | FeatureRequest | FeedbackReport | CrashReport | None:
         """Reconstruct a domain model from queued JSON data."""
         cls = _REPORT_TYPE_MAP.get(report_type)
         if cls is None:
@@ -256,7 +291,7 @@ class ReportQueueService:
             return cls(**data)
         except (TypeError, ValueError) as exc:
             logger.error(
-                "Failed to reconstruct %s model: %s", report_type, exc
+                "[%s] Model reconstruction failed (%s): %s", SUBSYSTEM, report_type, exc
             )
             return None
 

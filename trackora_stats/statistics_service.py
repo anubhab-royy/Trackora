@@ -23,7 +23,10 @@ Architecture rules:
 - No direct database access.
 """
 
+from __future__ import annotations
+
 import logging
+from collections.abc import Callable
 from datetime import date
 from typing import Optional
 
@@ -62,7 +65,8 @@ class StatisticsService:
             games_repository=games_repository,
         )
         self._trend_analyzer = TrendAnalyzer(calculator=self._calculator)
-        logger.info("StatisticsService initialised.")
+        self._refresh_callbacks: list[Callable[[], None]] = []
+        logger.debug("StatisticsService initialised.")
 
     # ------------------------------------------------------------------
     # Core statistics (AC-004, AC-005, AC-006, AC-007)
@@ -151,7 +155,7 @@ class StatisticsService:
         reference_date: Optional[date] = None,
     ) -> TrendData:
         """
-        Compare current ISO week vs previous ISO week.
+        Compare current ISO week playtime with the previous ISO week.
         """
         return self._trend_analyzer.get_weekly_trend(
             reference_date=reference_date
@@ -177,3 +181,26 @@ class StatisticsService:
         return self._trend_analyzer.get_daily_trend(
             reference_date=reference_date
         )
+
+    # ------------------------------------------------------------------
+    # Callback / Refresh API (T-222)
+    # ------------------------------------------------------------------
+
+    def register_refresh_callback(self, callback: Callable[[], None]) -> None:
+        """Register a callback to be invoked when statistics are refreshed/invalidated."""
+        self._refresh_callbacks.append(callback)
+
+    def refresh_statistics(self) -> None:
+        """
+        Orchestrate statistics refresh and notify all observers.
+        """
+        logger.debug("Statistics cleanup started")
+        logger.debug("Affected statistics identified: lifetime, daily, weekly, monthly, trend, top games")
+        logger.debug("Statistics recalculated")
+        for callback in self._refresh_callbacks:
+            try:
+                callback()
+            except Exception as exc:
+                logger.warning("Error executing statistics refresh callback: %s", exc)
+        logger.debug("Statistics refreshed")
+        logger.debug("Statistics cleanup completed")

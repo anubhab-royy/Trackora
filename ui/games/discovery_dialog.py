@@ -77,7 +77,7 @@ class DiscoveryDialog(QDialog):
     # ------------------------------------------------------------------
 
     def _setup_ui(self) -> None:
-        self.setWindowTitle("Scan For Games")
+        self.setWindowTitle("Scan for Games")
         self.setMinimumWidth(700)
         self.setMinimumHeight(500)
         self.setModal(True)

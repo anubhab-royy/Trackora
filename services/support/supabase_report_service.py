@@ -31,6 +31,8 @@ from trackora import __version__
 
 logger = logging.getLogger(__name__)
 
+SUBSYSTEM = "Supabase"
+
 _API_TIMEOUT_SECONDS = 15
 
 _ENV_SUPABASE_URL = "SUPABASE_URL"
@@ -218,9 +220,8 @@ class SupabaseReportService(AbstractReportService):
 
         api_url = self._config.api_url
         logger.debug(
-            "Supabase request URL: config.url=%s  config.api_url=%s",
-            self._config.url,
-            api_url,
+            "[%s] Submitting report (api_url=%s)",
+            SUBSYSTEM, api_url,
         )
 
         data = json.dumps(row).encode("utf-8")
@@ -235,21 +236,19 @@ class SupabaseReportService(AbstractReportService):
             },
         )
 
-        logger.debug("Supabase request.full_url=%s", req.full_url)
+        logger.debug("[%s] Sending request", SUBSYSTEM)
 
         try:
             with urlopen(req, timeout=_API_TIMEOUT_SECONDS) as resp:
                 logger.info(
-                    "Supabase report created: type=%s title=%r status=%d",
-                    report_type.value,
-                    title,
-                    resp.getcode(),
+                    "[%s] Report submitted (type=%s, status=%d)",
+                    SUBSYSTEM, report_type.value, resp.getcode(),
                 )
                 return SubmitResult(success=True)
         except HTTPError as exc:
             return self._handle_http_error(exc, report_type, title)
         except URLError as exc:
-            logger.error("Network error posting to Supabase: %s", exc)
+            logger.error("[%s] Submit failed (NetworkError: %s)", SUBSYSTEM, exc)
             return SubmitResult(
                 success=False,
                 error_message=(
@@ -258,7 +257,7 @@ class SupabaseReportService(AbstractReportService):
                 ),
             )
         except Exception as exc:
-            logger.exception("Unexpected error posting to Supabase: %s", exc)
+            logger.exception("[%s] Submit failed (UnexpectedError: %s)", SUBSYSTEM, exc)
             return SubmitResult(
                 success=False,
                 error_message="An unexpected error occurred while submitting.",
@@ -310,8 +309,8 @@ class SupabaseReportService(AbstractReportService):
 
         if status in (401, 403):
             logger.error(
-                "Supabase auth failed (%d) for type=%s title=%r: %s",
-                status, report_type.value, title, body_preview,
+                "[%s] Submit failed (AuthFailed: HTTP %d, type=%s)",
+                SUBSYSTEM, status, report_type.value,
             )
             return SubmitResult(
                 success=False,
@@ -321,8 +320,8 @@ class SupabaseReportService(AbstractReportService):
             )
         if status == 409:
             logger.warning(
-                "Supabase conflict (%d) for type=%s title=%r: %s",
-                status, report_type.value, title, body_preview,
+                "[%s] Submit failed (Conflict: HTTP %d, type=%s)",
+                SUBSYSTEM, status, report_type.value,
             )
             return SubmitResult(
                 success=False,
@@ -330,8 +329,8 @@ class SupabaseReportService(AbstractReportService):
             )
         if 400 <= status < 500:
             logger.error(
-                "Supabase client error (%d) for type=%s title=%r: %s",
-                status, report_type.value, title, body_preview,
+                "[%s] Submit failed (ClientError: HTTP %d, type=%s)",
+                SUBSYSTEM, status, report_type.value,
             )
             return SubmitResult(
                 success=False,
@@ -342,8 +341,8 @@ class SupabaseReportService(AbstractReportService):
             )
         if status >= 500:
             logger.error(
-                "Supabase server error (%d) for type=%s title=%r: %s",
-                status, report_type.value, title, body_preview,
+                "[%s] Submit failed (ServerError: HTTP %d, type=%s)",
+                SUBSYSTEM, status, report_type.value,
             )
             return SubmitResult(
                 success=False,
@@ -351,7 +350,7 @@ class SupabaseReportService(AbstractReportService):
             )
 
         logger.error(
-            "Supabase unexpected HTTP %d: %s", status, body_preview,
+            "[%s] Submit failed (UnexpectedHTTP %d)", SUBSYSTEM, status,
         )
         return SubmitResult(
             success=False,

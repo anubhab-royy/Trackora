@@ -30,6 +30,36 @@ def _minimal_crash_data() -> dict:
     }
 
 
+def _full_bug(title: str = "Test Bug") -> dict:
+    """Return a fully valid BugReport data dict."""
+    return {
+        "title": title,
+        "description": "Detailed description",
+        "steps_to_reproduce": "1. Do X",
+        "expected_behavior": "Y happens",
+        "actual_behavior": "Z happens",
+        "severity": "low",
+    }
+
+
+def _full_feature(title: str = "New Feature") -> dict:
+    """Return a fully valid FeatureRequest data dict."""
+    return {
+        "title": title,
+        "description": "Detailed description",
+        "use_case": "Users need this",
+        "priority": "medium",
+    }
+
+
+def _full_feedback(subject: str = "Great app") -> dict:
+    """Return a fully valid FeedbackReport data dict."""
+    return {
+        "subject": subject,
+        "message": "Loving it",
+        "category": "praise",
+    }
+
 @pytest.fixture
 def queue(tmp_path: Path) -> ReportQueueService:
     return ReportQueueService(storage_dir=tmp_path / "pending_reports")
@@ -98,8 +128,8 @@ class TestProcessQueue:
         assert result.succeeded == 0
 
     def test_process_submits_all_reports(self, queue: ReportQueueService):
-        queue.save_report("bug", {"title": "A"})
-        queue.save_report("feature", {"title": "B"})
+        queue.save_report("bug", _full_bug("A"))
+        queue.save_report("feature", _full_feature("B"))
         submitted = []
 
         def submit(report_type: str, data: dict) -> bool:
@@ -116,19 +146,19 @@ class TestProcessQueue:
     def test_successful_submission_deletes_file(
         self, queue: ReportQueueService
     ):
-        queue.save_report("bug", {"title": "A"})
+        queue.save_report("bug", _full_bug())
         queue.process_queue(lambda t, d: True)
         assert queue.count_pending() == 0
 
     def test_failed_submission_keeps_file(self, queue: ReportQueueService):
-        queue.save_report("bug", {"title": "A"})
+        queue.save_report("bug", _full_bug())
         queue.process_queue(lambda t, d: False)
         assert queue.count_pending() == 1
 
     def test_partial_failure_counts(self, queue: ReportQueueService):
-        queue.save_report("bug", {"title": "A"})
-        queue.save_report("feature", {"title": "B"})
-        queue.save_report("feedback", {"subject": "C"})
+        queue.save_report("bug", _full_bug())
+        queue.save_report("feature", _full_feature())
+        queue.save_report("feedback", _full_feedback())
 
         call_count = [0]
 
@@ -191,9 +221,9 @@ class TestProcessQueue:
         assert submitted[0][1]["report_id"] == "test-uuid"
 
     def test_mixed_queue_processes_all_types(self, queue: ReportQueueService):
-        queue.save_report("bug", {"title": "A"})
-        queue.save_report("feature", {"title": "B"})
-        queue.save_report("feedback", {"subject": "C"})
+        queue.save_report("bug", _full_bug())
+        queue.save_report("feature", _full_feature())
+        queue.save_report("feedback", _full_feedback())
         queue.save_report("crash", _minimal_crash_data())
         submitted = []
 

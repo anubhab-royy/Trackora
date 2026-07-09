@@ -59,6 +59,7 @@ class SettingsController:
         self._view.auto_check_toggled.connect(self._on_auto_check_toggled)
         self._view.export_csv_requested.connect(self._on_export_csv)
         self._view.export_json_requested.connect(self._on_export_json)
+        self._view.restore_requested.connect(self._on_restore_backup)
         self._view.check_updates_requested.connect(self._on_check_updates)
         self._view.view_release_notes_requested.connect(self._on_view_release_notes)
 
@@ -158,4 +159,63 @@ class SettingsController:
         else:
             QMessageBox.warning(
                 self._parent_widget, "Backup", "Backup failed. See logs for details."
+            )
+
+    def _on_restore_backup(self) -> None:
+        # 1. Confirmation dialog
+        reply = QMessageBox.question(
+            self._parent_widget,
+            "Restore Backup",
+            "Are you sure you want to restore the database from a backup?\n"
+            "This will overwrite all current games, sessions, and settings.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # 2. File picker
+        path, _ = QFileDialog.getOpenFileName(
+            self._parent_widget,
+            "Select Backup File",
+            "",
+            "Backup Files (*.zip *.json)",
+        )
+        if not path:
+            return
+
+        # 3. Call restore service
+        restore_service = getattr(self._parent_widget, "_restore_service", None)
+        if restore_service is None:
+            QMessageBox.warning(
+                self._parent_widget, "Restore Backup", "Restore service is not initialized."
+            )
+            return
+
+        try:
+            res = restore_service.restore_from_file(Path(path))
+            if res.success:
+                QMessageBox.information(
+                    self._parent_widget,
+                    "Restore Backup",
+                    "Database restore completed successfully.\n"
+                    "The application will now restart to apply the changes.",
+                )
+                # Restart the application
+                import sys
+                import subprocess
+                subprocess.Popen([sys.executable] + sys.argv)
+                sys.exit(0)
+            else:
+                QMessageBox.warning(
+                    self._parent_widget,
+                    "Restore Backup",
+                    f"Restore failed:\n{res.error}",
+                )
+        except Exception as exc:
+            logger.exception("Restore operation failed")
+            QMessageBox.warning(
+                self._parent_widget,
+                "Restore Backup",
+                f"An unexpected error occurred during restore:\n{exc}",
             )

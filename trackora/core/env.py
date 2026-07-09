@@ -39,9 +39,9 @@ def _discover_env_file(path: str | Path | None = None) -> Path | None:
     from trackora.core.paths import BASE_DIR
 
     candidates: list[Path] = [
+        BASE_DIR / ".env",
         Path.cwd() / ".env",
         Path(__file__).resolve().parent.parent.parent / ".env",
-        BASE_DIR / ".env",
     ]
     for candidate in candidates:
         if candidate.is_file():
@@ -67,7 +67,7 @@ def load_env_file(path: str | Path | None = None) -> None:
     """
     env_file = _discover_env_file(path)
     if env_file is None:
-        logger.warning("No .env file found — relying on system environment variables.")
+        logger.warning("Runtime configuration missing — No .env file found.")
         return
 
     loaded = 0
@@ -96,6 +96,6 @@ def load_env_file(path: str | Path | None = None) -> None:
         loaded += 1
 
     logger.info(
-        "Loaded %d variable(s) from %s (skipped %d already-set)",
-        loaded, env_file, skipped,
+        "Runtime configuration loaded from %s: loaded %d variable(s) (skipped %d already-set)",
+        env_file, loaded, skipped,
     )

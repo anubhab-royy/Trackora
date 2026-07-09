@@ -340,10 +340,10 @@ class TestSupportServiceWithQueue:
 
 class TestCrashSupport:
     def test_serialize_crash_report(self):
-        data = SupportService._serialize_crash_report(
-            title="Crash",
-            body="Stack trace...",
-            crash_type="unhandled_exception",
+        from services.crash.diagnostic_service import CrashReport
+        report = CrashReport(
+            report_id="test-id",
+            timestamp="2024-01-01T00:00:00",
             app_version="1.0.0",
             os_version="Linux-6.0",
             os_platform="Linux",
@@ -352,9 +352,10 @@ class TestCrashSupport:
             was_tracking=False,
             stack_trace="Traceback...",
             recent_log_entries=["log line 1", "log line 2"],
+            crash_type="unhandled_exception",
         )
-        assert data["title"] == "Crash"
-        assert data["body"] == "Stack trace..."
+        data = SupportService._serialize_crash_report(report)
+        assert data["report_id"] == "test-id"
         assert data["crash_type"] == "unhandled_exception"
         assert data["app_version"] == "1.0.0"
         assert data["os_version"] == "Linux-6.0"

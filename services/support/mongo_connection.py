@@ -9,11 +9,29 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from enum import Enum
+from typing import Optional, Callable
 
 from pymongo import MongoClient
 from pymongo.database import Database
+import pymongo.errors
 
 logger = logging.getLogger(__name__)
+
+SUBSYSTEM = "MongoDB"
+
+
+class MongoValidationStatus(Enum):
+    """Structured validation status categories for MongoDB connection checks."""
+    CONNECTED = "Connected"
+    CONFIGURATION_MISSING = "Configuration Missing"
+    AUTHENTICATION_FAILED = "Authentication Failed"
+    DATABASE_UNREACHABLE = "Database Unreachable"
+    TIMEOUT = "Timeout"
+    PERMISSION_ERROR = "Permission Error"
+    NETWORK_ERROR = "Network Error"
+    DNS_ERROR = "DNS Error"
+    UNKNOWN_ERROR = "Unknown Error"
 
 
 class MongoConnection:
@@ -38,17 +56,41 @@ class MongoConnection:
         self._lock = threading.Lock()
         self._available: bool | None = None
 
+        # T-230: Caching attributes for validation diagnostics
+        self._cached_status: MongoValidationStatus | None = None
+        self._last_error: str | None = None
+        self._auth_failed: bool = False
+
     # ------------------------------------------------------------------
     # Public properties
     # ------------------------------------------------------------------
 
     @property
     def is_available(self) -> bool:
-        """``True`` after a successful ``health_check()``, otherwise ``False``.
-
-        The initial state is ``False`` (lazy — no connection attempted).
-        """
+        """``True`` after a successful connection validation, otherwise ``False``."""
+        if self._cached_status is not None:
+            return self._cached_status == MongoValidationStatus.CONNECTED
         return bool(self._available)
+
+    @property
+    def last_error(self) -> str | None:
+        """Returns the last recorded error message, or None."""
+        return self._last_error
+
+    @property
+    def auth_failed(self) -> bool:
+        """Returns True if the last validation failed due to authentication credentials."""
+        return self._auth_failed
+
+    @property
+    def validation_status(self) -> MongoValidationStatus:
+        """Returns the current validation status enum."""
+        return self._cached_status or MongoValidationStatus.UNKNOWN_ERROR
+
+    @property
+    def is_pending(self) -> bool:
+        """Returns True if initial validation is still in progress."""
+        return self._cached_status is None
 
     @property
     def database(self) -> Database | None:
@@ -56,11 +98,6 @@ class MongoConnection:
 
         The underlying ``MongoClient`` is created **lazily** on the first
         call to this property and is reused for the lifetime of this object.
-
-        The database name is resolved in the following order:
-          1. URI path component (via ``get_default_database()``).
-          2. Explicit ``database_name`` constructor argument.
-          3. ``MONGODB_DATABASE`` environment variable.
         """
         if not self._uri:
             return None
@@ -70,52 +107,141 @@ class MongoConnection:
             if db is not None:
                 return db
         except Exception as e:
-            import traceback
-            logger.error(
-                "Diagnostics: Exception during get_default_database()\n"
-                "Class: %s\n"
-                "Message: %s\n"
-                "Traceback:\n%s",
-                e.__class__.__name__,
-                e,
-                traceback.format_exc(),
-            )
+            logger.error("[%s] get_default_database() failed (%s: %s)", SUBSYSTEM, e.__class__.__name__, e)
         if self._database_name:
             return client[self._database_name]
         return None
 
     # ------------------------------------------------------------------
+    # Validation Pipeline (T-230)
+    # ------------------------------------------------------------------
+
+    def validate(self, force: bool = False) -> MongoValidationStatus:
+        """Performs comprehensive validation checks on the MongoDB connection configuration & readiness.
+
+        Results are cached to avoid redundant network overhead.
+        """
+        with self._lock:
+            # If already connected, reuse cached state to avoid repeated network pings
+            if self._cached_status == MongoValidationStatus.CONNECTED and not force:
+                return self._cached_status
+
+            # If other errors cached and not forcing, reuse cached state
+            if self._cached_status is not None and not force:
+                return self._cached_status
+
+            logger.debug("[%s] Validation started", SUBSYSTEM)
+
+            # 1. MongoDB URI presence check
+            if not self._uri:
+                self._cached_status = MongoValidationStatus.CONFIGURATION_MISSING
+                self._last_error = "MONGODB_URI is empty or unset."
+                self._auth_failed = False
+                self._available = False
+                logger.warning("[%s] Validation failed (ConfigurationMissing)", SUBSYSTEM)
+                return self._cached_status
+
+            # 2. URI Format Check
+            uri_db = None
+            try:
+                from pymongo.uri_parser import parse_uri
+                parsed = parse_uri(self._uri)
+                uri_db = parsed.get("database")
+            except Exception as exc:
+                self._cached_status = MongoValidationStatus.CONFIGURATION_MISSING
+                self._last_error = f"Invalid MONGODB_URI format: {exc}"
+                self._auth_failed = False
+                self._available = False
+                logger.error("[%s] Validation failed (InvalidURI: %s)", SUBSYSTEM, exc)
+                return self._cached_status
+
+            # 3. Database name check
+            db_name = self._database_name or uri_db
+            if not db_name:
+                self._cached_status = MongoValidationStatus.CONFIGURATION_MISSING
+                self._last_error = "Database name is not configured."
+                self._auth_failed = False
+                self._available = False
+                logger.warning("[%s] Validation failed (ConfigurationMissing: no database name)", SUBSYSTEM)
+                return self._cached_status
+
+            logger.debug("[%s] Configuration loaded", SUBSYSTEM)
+
+            # 4. Connection & Ping reachability checks
+            temp_client = None
+            try:
+                # Use short timeouts to detect offline failures rapidly without blocking
+                temp_client = MongoClient(
+                    self._uri,
+                    serverSelectionTimeoutMS=3000,
+                    connectTimeoutMS=3000,
+                )
+                logger.debug("[%s] Connection established", SUBSYSTEM)
+
+                # Ping Cluster
+                temp_client.admin.command("ping")
+                logger.debug("[%s] Ping successful", SUBSYSTEM)
+
+                # Verify Database Reachability & Collection CRUD (Read/Write Permissions)
+                db = temp_client[db_name]
+                required_cols = ["bug_reports", "feature_requests", "feedback", "crash_reports"]
+
+                for col_name in required_cols:
+                    # Read permission check
+                    db[col_name].find_one({})
+
+                    # Write permission check (Insert and immediately delete validation document)
+                    test_doc = {"_validation_test": True}
+                    res = db[col_name].insert_one(test_doc)
+                    db[col_name].delete_one({"_id": res.inserted_id})
+
+                self._cached_status = MongoValidationStatus.CONNECTED
+                self._last_error = None
+                self._auth_failed = False
+                self._available = True
+
+            except Exception as exc:
+                self._cached_status = self._classify_exception(exc)
+                self._last_error = str(exc)
+                self._available = False
+
+                if self._cached_status == MongoValidationStatus.AUTHENTICATION_FAILED:
+                    self._auth_failed = True
+                    logger.error("[%s] Validation failed (AuthenticationFailed)", SUBSYSTEM)
+                else:
+                    self._auth_failed = False
+                    logger.warning("[%s] Validation failed (%s)", SUBSYSTEM, self._cached_status.value)
+
+            finally:
+                if temp_client is not None:
+                    temp_client.close()
+
+            if self._cached_status == MongoValidationStatus.CONNECTED:
+                logger.info("[%s] Validation completed (Connected)", SUBSYSTEM)
+            else:
+                logger.warning("[%s] Validation completed (%s)", SUBSYSTEM, self._cached_status.value)
+            return self._cached_status
+
+    def validate_async(self, callback: Callable[[MongoValidationStatus], None] | None = None) -> None:
+        """Runs the validation logic asynchronously in a background thread to prevent UI blocks."""
+        def run_validation():
+            status = self.validate(force=True)
+            if callback:
+                callback(status)
+
+        thread = threading.Thread(target=run_validation, name="MongoValidationThread", daemon=True)
+        thread.start()
+
+    # ------------------------------------------------------------------
     # Health check
     # ------------------------------------------------------------------
 
-    def health_check(self) -> bool:
-        """Ping the MongoDB server.
-
-        Returns ``True`` when the server responds, ``False`` otherwise.
-        Credentials are redacted from all log output.
-        """
-        if not self._uri:
-            logger.error("Diagnostics: health_check failed because MONGODB_URI is empty/unset")
-            return False
-        try:
-            client = self._get_or_create_client()
-            client.admin.command("ping")
-            self._available = True
-            logger.info("MongoDB: available")
+    def health_check(self, force: bool = False) -> bool:
+        """Check connection state, running validation checks to recover/reconnect if not healthy."""
+        if self._cached_status == MongoValidationStatus.CONNECTED and not force:
             return True
-        except Exception as e:
-            import traceback
-            logger.error(
-                "Diagnostics: Exception during health_check() ping\n"
-                "Class: %s\n"
-                "Message: %s\n"
-                "Traceback:\n%s",
-                e.__class__.__name__,
-                e,
-                traceback.format_exc(),
-            )
-            self._available = False
-            return False
+        status = self.validate(force=force)
+        return status == MongoValidationStatus.CONNECTED
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -131,6 +257,9 @@ class MongoConnection:
                 self._client.close()
                 self._client = None
             self._available = None
+            self._cached_status = None
+            self._last_error = None
+            self._auth_failed = False
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -148,15 +277,36 @@ class MongoConnection:
                         serverSelectionTimeoutMS=5000,
                     )
                 except Exception as e:
-                    import traceback
                     logger.error(
-                        "Diagnostics: Exception during connection creation (MongoClient init)\n"
-                        "Class: %s\n"
-                        "Message: %s\n"
-                        "Traceback:\n%s",
-                        e.__class__.__name__,
-                        e,
-                        traceback.format_exc(),
+                        "[%s] Client creation failed (%s: %s)",
+                        SUBSYSTEM, e.__class__.__name__, e,
                     )
                     raise
         return self._client
+
+    def _classify_exception(self, exc: Exception) -> MongoValidationStatus:
+        msg = str(exc).lower()
+
+        if isinstance(exc, (pymongo.errors.ConfigurationError, ValueError)):
+            return MongoValidationStatus.CONFIGURATION_MISSING
+
+        # Check for network/DNS/Timeout details in message prior to general types
+        if "dns" in msg or "resolve" in msg or "gai error" in msg or "temporary failure" in msg:
+            return MongoValidationStatus.DNS_ERROR
+
+        if "timeout" in msg or isinstance(exc, pymongo.errors.ServerSelectionTimeoutError):
+            return MongoValidationStatus.TIMEOUT
+
+        if isinstance(exc, pymongo.errors.OperationFailure):
+            # Error code 18 corresponds to AuthenticationFailed in MongoDB
+            if exc.code == 18 or "auth failed" in msg or "authentication failed" in msg:
+                return MongoValidationStatus.AUTHENTICATION_FAILED
+            # Error code 13 corresponds to Unauthorized in MongoDB
+            if exc.code == 13 or "not authorized" in msg or "unauthorized" in msg:
+                return MongoValidationStatus.PERMISSION_ERROR
+            return MongoValidationStatus.DATABASE_UNREACHABLE
+
+        if isinstance(exc, pymongo.errors.ConnectionFailure):
+            return MongoValidationStatus.NETWORK_ERROR
+
+        return MongoValidationStatus.UNKNOWN_ERROR

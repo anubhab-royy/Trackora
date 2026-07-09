@@ -25,29 +25,29 @@
 
 ### Reliability
 
-- [ ] **T-203**: Crash Recovery Improvements
+- [x] **T-203**: Crash Recovery Improvements
 
 ### Game Management
 
-- [ ] **T-220**: Delete Game Workflow
-- [ ] **T-221**: Database Cleanup
-- [ ] **T-222**: Statistics Cleanup
-- [ ] **T-223**: Cache Cleanup
-- [ ] **T-224**: Confirmation Dialog
+- [x] **T-220**: Delete Game Workflow
+- [x] **T-221**: Database Cleanup
+- [x] **T-222**: Statistics Cleanup
+- [x] **T-223**: Cache Cleanup
+- [x] **T-224**: Confirmation Dialog
 
 ### Support Centre
 
-- [ ] **T-230**: MongoDB Validation
-- [ ] **T-231**: Retry Pipeline
-- [ ] **T-232**: Offline Queue Validation
-- [ ] **T-233**: Improved Logging
-- [ ] **T-234**: Submission Confirmation
+- [x] **T-230**: MongoDB Validation
+- [x] **T-231**: Retry Pipeline
+- [x] **T-232**: Offline Queue Validation
+- [x] **T-233**: Improved Logging
+- [x] **T-234**: Submission Confirmation
 
 ### Testing
 
-- [ ] **T-240**: Regression Testing
-- [ ] **T-241**: Upgrade Testing
-- [ ] **T-242**: Installer Testing
-- [ ] **T-243**: Performance Validation
-- [ ] **T-244**: Release Candidate Validation
+- [x] **T-240**: Regression Testing
+- [x] **T-241**: Upgrade Testing
+- [x] **T-242**: Installer Testing
+- [x] **T-243**: Performance Validation
+- [x] **T-244**: Release Candidate Validation
 
