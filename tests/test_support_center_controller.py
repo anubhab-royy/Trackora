@@ -606,10 +606,11 @@ class TestLegacy:
 
     def test_empty_database_name_handling(self, mock_view, mock_service):
         from services.support.mongo_connection import MongoConnection
-        conn = MongoConnection(database_name="")
-        assert conn._database_name == ""
-        assert conn.database is None
         import os
+        with patch.dict(os.environ, {"MONGODB_URI": "", "MONGODB_DATABASE": ""}):
+            conn = MongoConnection(database_name="")
+            assert conn._database_name == ""
+            assert conn.database is None
         with patch.dict(os.environ, {}, clear=True):
             conn2 = MongoConnection()
             assert conn2._database_name == ""

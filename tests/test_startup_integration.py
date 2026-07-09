@@ -364,6 +364,8 @@ class MockQApplication:
         pass
     def setOrganizationName(self, name: str) -> None:
         pass
+    def setWindowIcon(self, icon: object) -> None:
+        pass
     def exec(self) -> int:  # type: ignore[misc]
         return 0
 
@@ -463,6 +465,11 @@ def _install_mocks(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type:
     """
     import sys as sys_mod
     from unittest.mock import MagicMock
+
+    # ── Unload trackora and related modules to force fresh mock imports ──
+    for k in list(sys_mod.modules.keys()):
+        if any(k.startswith(p) for p in ("trackora", "services", "tracker", "ui", "database", "trackora_stats")):
+            monkeypatch.delitem(sys_mod.modules, k)
 
     # ── Mock ALL packages that have CXXABI-linked transitive deps ──
     _mock_package(sys_mod, monkeypatch, "PyQt6", subpackages=[

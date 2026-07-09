@@ -86,11 +86,13 @@ class TestMongoConnectionLogging:
         assert len(debug_records) >= 1
 
     def test_validation_config_missing_warning(self, caplog: pytest.LogCaptureFixture) -> None:
-        conn = MongoConnection(uri="", database_name="")
-        caplog.set_level(logging.WARNING)
-        conn.validate(force=True)
-        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-        assert any("ConfigurationMissing" in r.getMessage() for r in warnings)
+        import os
+        with patch.dict(os.environ, {"MONGODB_URI": "", "MONGODB_DATABASE": ""}):
+            conn = MongoConnection(uri="", database_name="")
+            caplog.set_level(logging.WARNING)
+            conn.validate(force=True)
+            warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+            assert any("ConfigurationMissing" in r.getMessage() for r in warnings)
 
     def test_validation_invalid_uri_error(self, caplog: pytest.LogCaptureFixture) -> None:
         conn = MongoConnection(uri="not-a-valid-uri", database_name="test")
@@ -127,10 +129,12 @@ class TestMongoConnectionLogging:
         _assert_no_pattern(caplog.records, r"secret")
 
     def test_subsystem_tag_present(self, caplog: pytest.LogCaptureFixture) -> None:
-        conn = MongoConnection(uri="", database_name="")
-        caplog.set_level(logging.DEBUG)
-        conn.validate(force=True)
-        _assert_tag(caplog.records, "[MongoDB]")
+        import os
+        with patch.dict(os.environ, {"MONGODB_URI": "", "MONGODB_DATABASE": ""}):
+            conn = MongoConnection(uri="", database_name="")
+            caplog.set_level(logging.DEBUG)
+            conn.validate(force=True)
+            _assert_tag(caplog.records, "[MongoDB]")
 
     def test_parameterized_logging(self, caplog: pytest.LogCaptureFixture) -> None:
         """Verify logs use %-formatting, not f-strings."""

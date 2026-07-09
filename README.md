@@ -17,6 +17,8 @@ Trackora runs silently in your system tray, automatically detects when you play 
 - **Backup & Recovery** — Automatic database backup and crash-safe session recovery.
 - **MongoDB Reporting** — Optional cloud reporting to your own MongoDB Atlas cluster.
 - **Support Center** — In-app bug reports and feature requests via GitHub Issues.
+- **Silent Startup** — Minimize to system tray on launch for frictionless background execution.
+- **Background Updates** — Off-thread update checker keeps main UI fast and responsive.
 - **Dark & Light Themes** — Toggle between dark and light mode.
 - **Local-Only by Default** — All data stored in SQLite. No cloud, no accounts, no telemetry.
 
@@ -24,7 +26,7 @@ Trackora runs silently in your system tray, automatically detects when you play 
 
 ### Windows Installer (Recommended)
 
-1. Download `Trackora_Setup_v2.0.0.exe` from the [Releases](https://github.com/anomalyco/trackora/releases) page
+1. Download `Trackora-Setup-2.0.1.exe` from the [Releases](https://github.com/anubhab-royy/Trackora/releases) page
 2. Run the installer
 3. Launch Trackora from the Start Menu
 
@@ -50,8 +52,8 @@ Download `Trackora.exe` from the Releases page and run it directly. No installat
 ### Quick Start
 
 ```bash
-git clone https://github.com/anomalyco/trackora.git
-cd trackora
+git clone https://github.com/anubhab-royy/Trackora.git
+cd Trackora
 python -m venv .venv
 
 # Windows
@@ -102,10 +104,17 @@ No data is stored in the installation directory. Uninstalling preserves your dat
 
 ## Roadmap
 
+### v2.1.0 (Planned)
 - **Game activity insights** — Per-game achievements, playtime goals
 - **Session tagging** — Custom labels and notes for sessions
-- **Cross-platform** — Linux and macOS native builds
 - **Plugins** — Community-extensible detection and reporting
+
+### Future Releases
+- **Cross-platform** — Linux and macOS native builds
+
+### Completed & Released
+- **v2.0.1 (Released)** — Silent startup (`--silent`), background update thread, direct installer download links, cascading game deletion, robust offline queue schema validations and quarantine gates.
+- **v2.0.0 (Released)** — MongoDB cloud backups, Automatic game discovery from 6 launchers (Steam, Epic, Battle.net, EA, Ubisoft, Riot), interactive pyqtgraph analytics, database backup manager and schema version migrations.
 
 ## Contributing
 
