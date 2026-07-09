@@ -9,9 +9,21 @@
 #     dist/Trackora.exe
 #
 
-# Version — keep in sync with trackora/__init__.py
-version = "2.0.0"
+# ---------------------------------------------------------------------------
+# Version — read live from the single source of truth.
+# Run `python scripts/bump_version.py` before building to regenerate
+# version_info.txt (EXE resource block) and installer/version.iss.
+# ---------------------------------------------------------------------------
+import re as _re
+_src = open("trackora/__init__.py", encoding="utf-8").read()
+_match = _re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', _src, _re.M)
+if not _match:
+    raise RuntimeError("Could not read __version__ from trackora/__init__.py")
+_version = _match.group(1)
+del _re, _src, _match
+
 BLOCK_CIPHER_LIST = None
+
 
 a = Analysis(
     ["trackora/__main__.py"],

@@ -90,7 +90,7 @@ class TrendAnalyzer:
             target_date=previous_reference
         )
 
-        logger.info(
+        logger.debug(
             "Weekly trend: current=%ds, previous=%ds.",
             current_stats.total_seconds,
             previous_stats.total_seconds,
@@ -138,7 +138,7 @@ class TrendAnalyzer:
             year=prev_year, month=prev_month
         )
 
-        logger.info(
+        logger.debug(
             "Monthly trend: current=%ds, previous=%ds.",
             current_stats.total_seconds,
             previous_stats.total_seconds,
@@ -174,7 +174,7 @@ class TrendAnalyzer:
             target_date=reference_date - timedelta(days=1)
         )
 
-        logger.info(
+        logger.debug(
             "Daily trend: current=%ds, previous=%ds.",
             current_stats.total_seconds,
             previous_stats.total_seconds,

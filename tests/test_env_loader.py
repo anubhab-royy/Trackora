@@ -146,7 +146,7 @@ class TestStartupIntegration:
         "ensure_dirs", "DatabaseManager", "SchemaVersionManager",
         "SchemaVersion", "CrashService", "DiagnosticService",
         "GamesRepository", "SessionsRepository", "ActiveSessionsRepository",
-        "SettingsRepository", "GameService", "SessionHistoryService",
+        "SettingsRepository", "GameService", "DeleteGameService", "CacheCleanupService", "SessionHistoryService",
         "StatisticsService", "PlaytimeCalculator", "ExportService",
         "MongoReportService", "ReportQueueService",
         "UpdateAnnouncementsService", "SupportService", "TrackingState",
@@ -229,7 +229,7 @@ class TestStartupIntegration:
             real_sys.exit = real_exit
             self._stop_patches(import_paths)
 
-        mongo_instance.health_check.assert_called_once()
+        mongo_instance.validate_async.assert_called_once()
         mongo_instance.is_available.assert_not_called()
 
 
@@ -249,3 +249,28 @@ class TestQueueFallback:
         assert isinstance(result, SubmitResult)
         assert result.success is False
         assert "connection failed" in (result.error_message or "")
+
+class TestAppdataEnvPrioritization:
+    def test_prioritizes_appdata_env_over_cwd(self, tmp_path: Path):
+        appdata_dir = tmp_path / "appdata"
+        appdata_dir.mkdir()
+        appdata_env = appdata_dir / ".env"
+        appdata_env.write_text("MONGODB_URI=appdata\n", encoding="utf-8")
+
+        cwd_dir = tmp_path / "cwd"
+        cwd_dir.mkdir()
+        cwd_env = cwd_dir / ".env"
+        cwd_env.write_text("MONGODB_URI=cwd\n", encoding="utf-8")
+
+        def mock_is_file(self_path):
+            return self_path == appdata_env or self_path == cwd_env
+
+        with (
+            patch("trackora.core.env.Path.cwd", return_value=cwd_dir),
+            patch("trackora.core.paths.BASE_DIR", appdata_dir),
+            patch("trackora.core.env.Path.is_file", mock_is_file),
+        ):
+            result = _discover_env_file(None)
+            assert result == appdata_env
+
+

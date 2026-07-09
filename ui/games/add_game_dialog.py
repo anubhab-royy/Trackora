@@ -124,8 +124,7 @@ class AddGameDialog(QDialog):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
 
-        browse_btn = QPushButton("Browse…")
-        browse_btn.setFixedWidth(80)
+        browse_btn = QPushButton("Browse...")
         browse_btn.clicked.connect(self._on_browse)
 
         path_layout.addWidget(self._path_edit)

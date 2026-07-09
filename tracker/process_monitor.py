@@ -150,6 +150,8 @@ class ProcessMonitor:
         for game_id in result.stopped:
             self._session_manager.end_session(game_id=game_id)
 
+        self._session_manager.update_active_sessions_heartbeat()
+
     # ------------------------------------------------------------------
     # Dynamic game registration (called from UI / service layer)
     # ------------------------------------------------------------------

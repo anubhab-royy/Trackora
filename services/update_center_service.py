@@ -93,7 +93,7 @@ class UpdateCenterService:
     def __init__(
         self,
         settings_repo: object | None = None,
-        repo: str = "anomalyco/trackora",
+        repo: str = "anubhab-royy/Trackora",
         cache_dir: Path | None = None,
     ) -> None:
         self._settings_repo = settings_repo
@@ -108,15 +108,14 @@ class UpdateCenterService:
     # Public API
     # ------------------------------------------------------------------
 
-    def check_for_updates(self) -> UpdateCheckResult:
+    def check_for_updates(self, force: bool = False) -> UpdateCheckResult:
         """
         Check GitHub for a newer version of Trackora.
 
-        Returns cached result if checked within the last hour.
-        Otherwise fetches from GitHub API, caches the result,
-        and returns it.
+        If force is True, bypasses the rate-limiting cooldown check.
+        Otherwise, returns cached result if checked within the last hour.
         """
-        if self._is_rate_limited():
+        if not force and self._is_rate_limited():
             cached = self._get_cached_or_error()
             if cached:
                 cached.previously_checked = True

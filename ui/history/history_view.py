@@ -4,7 +4,7 @@ Main widget for the Session History screen.
 
 Displays:
   - Search bar for filtering by game name
-  - Filter row: game combo, date range, duration range
+  - Filter row: game combo, date range
   - Sortable table of sessions
   - Pagination controls (prev / next / page info)
   - Summary footer (total sessions, total playtime)
@@ -33,7 +33,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QPushButton,
     QSizePolicy,
-    QSpinBox,
     QTableView,
     QVBoxLayout,
     QWidget,
@@ -105,16 +104,6 @@ class HistoryView(QWidget):
             return self._date_to_edit.date().toPython()
         return None
 
-    def get_min_duration(self) -> int | None:
-        if self._min_dur_check.isChecked():
-            return self._min_dur_spin.value()
-        return None
-
-    def get_max_duration(self) -> int | None:
-        if self._max_dur_check.isChecked():
-            return self._max_dur_spin.value()
-        return None
-
     def get_sort_by(self) -> str:
         """Return the sort column identifier based on the current header sort indicator."""
         header = self._table.horizontalHeader()
@@ -160,7 +149,7 @@ class HistoryView(QWidget):
 
         # Search
         self._search_edit = QLineEdit()
-        self._search_edit.setPlaceholderText("Search by game name…")
+        self._search_edit.setPlaceholderText("Search by game name...")
         self._search_edit.setClearButtonEnabled(True)
         self._search_edit.setMinimumWidth(220)
         self._search_edit.setFixedHeight(30)
@@ -220,49 +209,42 @@ class HistoryView(QWidget):
         self._date_to_edit.setEnabled(False)
         filter_layout.addWidget(self._date_to_edit)
 
-        # Min duration
-        self._min_dur_check = QPushButton("Min (min):")
-        self._min_dur_check.setCheckable(True)
-        self._min_dur_check.setChecked(False)
-        self._min_dur_check.setFixedHeight(28)
-        self._min_dur_check.setStyleSheet(
-            "QPushButton { font-size: 11px; padding: 0 8px; }"
-            "QPushButton:checked { font-weight: bold; }"
-        )
-        filter_layout.addWidget(self._min_dur_check)
-
-        self._min_dur_spin = QSpinBox()
-        self._min_dur_spin.setRange(0, 99999)
-        self._min_dur_spin.setValue(0)
-        self._min_dur_spin.setSuffix(" min")
-        self._min_dur_spin.setFixedHeight(28)
-        self._min_dur_spin.setFixedWidth(100)
-        self._min_dur_spin.setEnabled(False)
-        filter_layout.addWidget(self._min_dur_spin)
-
-        # Max duration
-        self._max_dur_check = QPushButton("Max (min):")
-        self._max_dur_check.setCheckable(True)
-        self._max_dur_check.setChecked(False)
-        self._max_dur_check.setFixedHeight(28)
-        self._max_dur_check.setStyleSheet(
-            "QPushButton { font-size: 11px; padding: 0 8px; }"
-            "QPushButton:checked { font-weight: bold; }"
-        )
-        filter_layout.addWidget(self._max_dur_check)
-
-        self._max_dur_spin = QSpinBox()
-        self._max_dur_spin.setRange(0, 99999)
-        self._max_dur_spin.setValue(0)
-        self._max_dur_spin.setSuffix(" min")
-        self._max_dur_spin.setFixedHeight(28)
-        self._max_dur_spin.setFixedWidth(100)
-        self._max_dur_spin.setEnabled(False)
-        filter_layout.addWidget(self._max_dur_spin)
+        # Reset button
+        self._reset_btn = QPushButton("Reset")
+        self._reset_btn.setObjectName("SecondaryButton")
+        self._reset_btn.setFixedHeight(28)
+        self._reset_btn.setStyleSheet("font-size: 11px; padding: 0 10px;")
+        self._reset_btn.clicked.connect(self.reset_filters)
+        filter_layout.addWidget(self._reset_btn)
 
         filter_layout.addStretch()
 
         root_layout.addLayout(filter_layout)
+
+    def reset_filters(self) -> None:
+        """Reset all search/filter controls to their default states."""
+        self._search_edit.blockSignals(True)
+        self._search_edit.clear()
+        self._search_edit.blockSignals(False)
+
+        self._game_combo.blockSignals(True)
+        self._game_combo.setCurrentIndex(0)
+        self._game_combo.blockSignals(False)
+
+        self._date_from_check.blockSignals(True)
+        self._date_from_check.setChecked(False)
+        self._date_from_edit.setEnabled(False)
+        self._date_from_edit.setDate(self._date_from_edit.date().currentDate())
+        self._date_from_check.blockSignals(False)
+
+        self._date_to_check.blockSignals(True)
+        self._date_to_check.setChecked(False)
+        self._date_to_edit.setEnabled(False)
+        self._date_to_edit.setDate(self._date_to_edit.date().currentDate())
+        self._date_to_check.blockSignals(False)
+
+        self._current_page = 0
+        self.query_changed.emit()
 
     def _build_table(self, root_layout: QVBoxLayout) -> None:
         self._table = QTableView()
@@ -337,10 +319,6 @@ class HistoryView(QWidget):
         self._date_from_edit.dateChanged.connect(self._emit_query_changed)
         self._date_to_check.toggled.connect(self._on_date_to_toggle)
         self._date_to_edit.dateChanged.connect(self._emit_query_changed)
-        self._min_dur_check.toggled.connect(self._on_min_dur_toggle)
-        self._min_dur_spin.valueChanged.connect(self._emit_query_changed)
-        self._max_dur_check.toggled.connect(self._on_max_dur_toggle)
-        self._max_dur_spin.valueChanged.connect(self._emit_query_changed)
 
         header = self._table.horizontalHeader()
         header.sortIndicatorChanged.connect(self._on_sort_changed)
@@ -362,14 +340,6 @@ class HistoryView(QWidget):
 
     def _on_date_to_toggle(self, checked: bool) -> None:
         self._date_to_edit.setEnabled(checked)
-        self._emit_query_changed()
-
-    def _on_min_dur_toggle(self, checked: bool) -> None:
-        self._min_dur_spin.setEnabled(checked)
-        self._emit_query_changed()
-
-    def _on_max_dur_toggle(self, checked: bool) -> None:
-        self._max_dur_spin.setEnabled(checked)
         self._emit_query_changed()
 
     def _on_sort_changed(self, section: int, order: Qt.SortOrder) -> None:

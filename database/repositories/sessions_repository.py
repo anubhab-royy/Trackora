@@ -141,19 +141,18 @@ class SessionsRepository:
         game_id: int | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
-        min_duration: int | None = None,
-        max_duration: int | None = None,
         sort_by: str = "start_time",
         sort_order: str = "DESC",
         limit: int = 100,
         offset: int = 0,
-    ) -> tuple[int, list[SessionView]]:
+    ) -> tuple[int, int, list[SessionView]]:
         """
         Query sessions with full search, filter, sort, and pagination.
 
         Returns:
-            (total_count, list of SessionView) — total_count is the number of
-            matching rows *before* LIMIT/OFFSET is applied.
+            (total_count, total_duration_seconds, list of SessionView) —
+            total_count and total_duration_seconds are matching metrics
+            *before* LIMIT/OFFSET is applied.
 
         Accepted sort_by values: start_time, end_time, duration_seconds, game_name.
         sort_order: ASC or DESC (case-insensitive).
@@ -186,20 +185,12 @@ class SessionsRepository:
             where_clauses.append("s.start_time < ?")
             params.append(end_dt.isoformat())
 
-        if min_duration is not None:
-            where_clauses.append("s.duration_seconds >= ?")
-            params.append(min_duration)
-
-        if max_duration is not None:
-            where_clauses.append("s.duration_seconds <= ?")
-            params.append(max_duration)
-
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
         sort_expr = "g.name" if sort_by == "game_name" else f"s.{sort_by}"
 
         count_sql = (
-            f"SELECT COUNT(*) FROM sessions s "
+            f"SELECT COUNT(*), SUM(s.duration_seconds) FROM sessions s "
             f"JOIN games g ON s.game_id = g.id WHERE {where_sql};"
         )
 
@@ -214,12 +205,14 @@ class SessionsRepository:
 
         cursor = self._conn.cursor()
         cursor.execute(count_sql, params)
-        total = cursor.fetchone()[0]
+        row = cursor.fetchone()
+        total = row[0]
+        total_duration = row[1] if row[1] is not None else 0
 
         cursor.execute(data_sql, params + [limit, offset])
         results = [_row_to_session_view(r) for r in cursor.fetchall()]
 
-        return total, results
+        return total, total_duration, results
 
     # ------------------------------------------------------------------
     # Read — statistics (AC-004 through AC-007)
@@ -372,10 +365,11 @@ class SessionsRepository:
         self._conn.commit()
         logger.info("Session deleted: id=%s", session_id)
 
-    def delete_all_for_game(self, game_id: int) -> int:
+    def delete_all_for_game(self, game_id: int, commit: bool = True) -> int:
         cursor = self._conn.cursor()
         cursor.execute("DELETE FROM sessions WHERE game_id = ?;", (game_id,))
-        self._conn.commit()
+        if commit:
+            self._conn.commit()
         deleted = cursor.rowcount
         logger.info("Deleted %s sessions for game_id=%s", deleted, game_id)
         return deleted

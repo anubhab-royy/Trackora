@@ -178,19 +178,11 @@ class TestSupportServiceDI:
 
 
 class TestCrashDialogDI:
-    def test_accepts_abstract_service_type_hint(self):
-        """CrashDialog constructor type-hints github_service as AbstractReportService."""
+    def test_accepts_support_service_type_hint(self):
+        """CrashDialog constructor type-hints support_service as SupportService."""
         import inspect
         sig = inspect.signature(CrashDialog.__init__)
-        param = sig.parameters.get("github_service")
+        param = sig.parameters.get("support_service")
         assert param is not None
         # Verify the default is None (backward compatible)
-        assert param.default is None
-
-    def test_accepts_queue_service_type_hint(self):
-        """CrashDialog constructor type-hints queue_service as ReportQueueService."""
-        import inspect
-        sig = inspect.signature(CrashDialog.__init__)
-        param = sig.parameters.get("queue_service")
-        assert param is not None
         assert param.default is None

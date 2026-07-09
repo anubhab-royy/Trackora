@@ -42,6 +42,7 @@ class RecoveredSession:
     duration_seconds: int
     saved_session_id: Optional[int]
     was_saved: bool
+    process_id: int = 0
     discard_reason: Optional[str] = None
 
 
@@ -51,6 +52,7 @@ class RecoveryResult:
     Summary of the full recovery operation.
     """
     recovered_sessions: list[RecoveredSession] = field(default_factory=list)
+    discarded_sessions: list[RecoveredSession] = field(default_factory=list)
     discarded_count: int = 0
     error_count: int = 0
 
@@ -95,12 +97,16 @@ class RecoveryManager:
         self._active_sessions_repo = active_sessions_repo
         self._sessions_repo = sessions_repo
 
-    def recover(self) -> RecoveryResult:
+    def recover(self, was_crash: bool = True) -> RecoveryResult:
         """
         Main recovery entry point. Called once at application startup.
 
         Reads all records from active_sessions, saves each as a completed
         session in the sessions table, then clears the active_sessions table.
+
+        Args:
+            was_crash: True if the startup check indicates a previous crash/unexpected shutdown.
+                       If False, logs orphaned sessions as clean shutdown recovery rather than a warning.
 
         Returns:
             RecoveryResult with details of what was recovered, discarded, or errored.
@@ -130,11 +136,18 @@ class RecoveryManager:
             )
             return result
 
-        logger.warning(
-            "RecoveryManager: Found %d orphaned active session(s). "
-            "Application likely did not shut down cleanly.",
-            len(orphaned),
-        )
+        if was_crash:
+            logger.warning(
+                "RecoveryManager: Found %d orphaned active session(s). "
+                "Application likely did not shut down cleanly.",
+                len(orphaned),
+            )
+        else:
+            logger.info(
+                "RecoveryManager: Found %d orphaned active session(s) from a clean shutdown. "
+                "Shutting down while game was active.",
+                len(orphaned),
+            )
 
         recovery_time: datetime = datetime.now(tz=timezone.utc)
 
@@ -144,6 +157,7 @@ class RecoveryManager:
             if recovered.was_saved:
                 result.recovered_sessions.append(recovered)
             elif recovered.discard_reason is not None:
+                result.discarded_sessions.append(recovered)
                 result.discarded_count += 1
             else:
                 result.error_count += 1
@@ -180,11 +194,19 @@ class RecoveryManager:
             active_session.start_time,
         )
 
-        # Ensure start_time is timezone-aware for safe arithmetic
+        # Ensure start_time and created_at are timezone-aware for safe arithmetic
         start_time = self._ensure_utc(active_session.start_time)
+        created_at = self._ensure_utc(active_session.created_at)
+
+        # Use created_at as the last known heartbeat of the session before the crash/shutdown
+        # Fall back to recovery_time if created_at is not greater than start_time (e.g. in tests/pre-heartbeat crash)
+        if created_at > start_time:
+            end_time = created_at
+        else:
+            end_time = recovery_time
 
         # Calculate duration
-        duration_seconds = self._calculate_duration(start_time, recovery_time)
+        duration_seconds = self._calculate_duration(start_time, end_time)
 
         # Discard sessions that are too short to be meaningful
         if duration_seconds < MINIMUM_SESSION_DURATION_SECONDS:
@@ -199,6 +221,7 @@ class RecoveryManager:
             return RecoveredSession(
                 active_session_id=active_session.id,
                 game_id=active_session.game_id,
+                process_id=active_session.process_id,
                 start_time=start_time,
                 duration_seconds=duration_seconds,
                 saved_session_id=None,
@@ -222,6 +245,7 @@ class RecoveryManager:
             return RecoveredSession(
                 active_session_id=active_session.id,
                 game_id=active_session.game_id,
+                process_id=active_session.process_id,
                 start_time=start_time,
                 duration_seconds=duration_seconds,
                 saved_session_id=None,
@@ -232,11 +256,11 @@ class RecoveryManager:
                 ),
             )
 
-        # Save the session to the sessions table
+        # Save the session to the sessions table using the last heartbeat as end_time
         saved_session_id = self._save_recovered_session(
             game_id=active_session.game_id,
             start_time=start_time,
-            end_time=recovery_time,
+            end_time=end_time,
             duration_seconds=duration_seconds,
         )
 
@@ -245,6 +269,7 @@ class RecoveryManager:
             return RecoveredSession(
                 active_session_id=active_session.id,
                 game_id=active_session.game_id,
+                process_id=active_session.process_id,
                 start_time=start_time,
                 duration_seconds=duration_seconds,
                 saved_session_id=None,
@@ -267,6 +292,7 @@ class RecoveryManager:
         return RecoveredSession(
             active_session_id=active_session.id,
             game_id=active_session.game_id,
+            process_id=active_session.process_id,
             start_time=start_time,
             duration_seconds=duration_seconds,
             saved_session_id=saved_session_id,

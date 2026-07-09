@@ -79,6 +79,37 @@ class TestUpdateDialog:
         assert download_btn is not None
         download_btn.click()
         mock_open_url.assert_called_once()
+        args, _ = mock_open_url.call_args
+        assert args[0].toString() == _SAMPLE_RELEASE.download_url
+
+    @patch("PyQt6.QtGui.QDesktopServices.openUrl")
+    def test_download_falls_back_to_html_url(
+        self, mock_open_url: MagicMock, qapp
+    ) -> None:
+        release_no_download = GitHubRelease(
+            tag_name="v2.0.0",
+            name="Trackora 2.0.0",
+            body="## What's New\n- Feature A",
+            published_at="2026-06-20T12:00:00Z",
+            html_url="https://github.com/anomalyco/trackora/releases/tag/v2.0.0",
+            prerelease=False,
+            download_url="",  # empty download URL
+        )
+        result = UpdateCheckResult(
+            update_available=True,
+            current_version="1.1.0",
+            latest_version="2.0.0",
+            release=release_no_download,
+            checked_at="2026-06-20T12:00:00",
+        )
+        dialog = UpdateDialog(result)
+        from PyQt6.QtWidgets import QPushButton
+        download_btn = dialog.findChild(QPushButton, "DownloadButton")
+        assert download_btn is not None
+        download_btn.click()
+        mock_open_url.assert_called_once()
+        args, _ = mock_open_url.call_args
+        assert args[0].toString() == release_no_download.html_url
 
     def test_ignore_version_sets_flag(self, qapp) -> None:
         result = UpdateCheckResult(

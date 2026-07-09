@@ -178,6 +178,8 @@ class TestOrphanTmpCleanup:
         assert other_tmp.exists()
 
     def test_orphan_tmp_cleanup_failure_logged(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        if os.name == "nt":
+            pytest.skip("Chmod directory permissions not fully supported on Windows")
         caplog.set_level(logging.WARNING)
         schema_path = tmp_path / "schema.json"
         tmp_file = tmp_path / "schema.json.tmp"
@@ -401,6 +403,8 @@ class TestReadFieldValidation:
 
 class TestReadPermission:
     def test_permission_denied(self, manager: SchemaVersionManager) -> None:
+        if os.name == "nt":
+            pytest.skip("Chmod file permissions not fully supported on Windows")
         _write_json(manager._schema_path)
         manager._schema_path.chmod(0o000)
         try:
@@ -417,6 +421,8 @@ class TestReadPermission:
             mgr.read()
 
     def test_symlink_to_valid_file(self, tmp_path: Path) -> None:
+        if os.name == "nt":
+            pytest.skip("Creating symlinks requires administrator privileges on Windows")
         real_file = tmp_path / "real.json"
         _write_json(real_file)
         schema_path = tmp_path / "schema.json"
@@ -523,6 +529,8 @@ class TestReadLogging:
         assert any(r.levelno == logging.WARNING for r in caplog.records)
 
     def test_permission_error_logs_error(self, manager: SchemaVersionManager, caplog: pytest.LogCaptureFixture) -> None:
+        if os.name == "nt":
+            pytest.skip("Chmod file permissions not fully supported on Windows")
         caplog.set_level(logging.ERROR)
         _write_json(manager._schema_path)
         manager._schema_path.chmod(0o000)
@@ -650,6 +658,8 @@ class TestWriteCreatesParentDir:
 
 class TestWriteErrors:
     def test_write_permission_error_raised(self, manager: SchemaVersionManager) -> None:
+        if os.name == "nt":
+            pytest.skip("Chmod directory permissions not fully supported on Windows")
         manager._schema_path.parent.mkdir(parents=True, exist_ok=True)
         # Make parent read-only so .tmp cannot be created
         parent = manager._schema_path.parent

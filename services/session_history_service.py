@@ -35,8 +35,6 @@ class SessionHistoryQuery:
     game_id: int | None = None
     date_from: date | None = None
     date_to: date | None = None
-    min_duration_minutes: int | None = None
-    max_duration_minutes: int | None = None
     sort_by: str = "start_time"
     sort_order: str = "DESC"
     page: int = 0
@@ -84,28 +82,17 @@ class SessionHistoryService:
         total count, pagination info, and total duration.
         """
         try:
-            min_seconds: int | None = None
-            if query.min_duration_minutes is not None:
-                min_seconds = query.min_duration_minutes * 60
-
-            max_seconds: int | None = None
-            if query.max_duration_minutes is not None:
-                max_seconds = query.max_duration_minutes * 60
-
-            total_count, session_views = self._sessions_repo.query_sessions(
+            total_count, total_duration, session_views = self._sessions_repo.query_sessions(
                 search_text=query.search_text,
                 game_id=query.game_id,
                 date_from=query.date_from,
                 date_to=query.date_to,
-                min_duration=min_seconds,
-                max_duration=max_seconds,
                 sort_by=query.sort_by,
                 sort_order=query.sort_order,
                 limit=query.page_size,
                 offset=query.page * query.page_size,
             )
 
-            total_duration = sum(s.duration_seconds for s in session_views)
             total_pages = max(0, (total_count - 1) // query.page_size) + 1 if total_count > 0 else 0
 
             return SessionHistoryResult(

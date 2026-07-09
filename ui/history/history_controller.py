@@ -96,8 +96,6 @@ class HistoryController:
                 game_id=self._view.get_game_id(),
                 date_from=self._view.get_date_from(),
                 date_to=self._view.get_date_to(),
-                min_duration_minutes=self._view.get_min_duration(),
-                max_duration_minutes=self._view.get_max_duration(),
                 sort_by=self._view.get_sort_by(),
                 sort_order=self._view.get_sort_order(),
                 page=self._view.get_current_page(),

@@ -15,9 +15,9 @@
 
 #define MyAppName "Trackora"
 #define MyAppShortName "Trackora"
-#define MyAppVersion "2.0.0"
+#include "version.iss"
 #define MyAppPublisher "Trackora"
-#define MyAppURL "https://github.com/anomalyco/trackora"
+#define MyAppURL "https://github.com/anubhab-royy/Trackora"
 #define MyAppExeName "Trackora.exe"
 #define MyAppAssocName "Trackora Data"
 
@@ -75,7 +75,8 @@ Name: "startup"; Description: "Start &Trackora when Windows starts"; GroupDescri
 
 [Files]
 Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-; Ensure no files are installed in AppData — runtime data is created on first launch
+Source: "..\.env"; DestDir: "{app}"; Flags: ignoreversion
+; Ensure no database files are installed in AppData — SQLite is created on first launch
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -303,6 +304,42 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// Copy the .env configuration file to AppData if it does not already exist
+// ---------------------------------------------------------------------------
+procedure CopyEnvFile;
+var
+  SourceFile, DestDir, DestFile: string;
+begin
+  SourceFile := ExpandConstant('{app}\.env');
+  DestDir := ExpandConstant('{userappdata}\{#MyAppShortName}');
+  DestFile := DestDir + '\.env';
+
+  if not FileExists(SourceFile) then
+  begin
+    Log('Source .env file does not exist at: ' + SourceFile);
+    Exit;
+  end;
+
+  if not ForceDirectories(DestDir) then
+  begin
+    Log('Failed to create AppData directory: ' + DestDir);
+    Exit;
+  end;
+
+  if FileExists(DestFile) then
+  begin
+    Log('Target .env file already exists at: ' + DestFile + ' — preserving user configuration.');
+    Exit;
+  end;
+
+  Log('Copying .env file: ' + SourceFile + ' -> ' + DestFile);
+  if CopyFile(SourceFile, DestFile, True) then
+    Log('  Successfully copied .env file.')
+  else
+    Log('  WARNING: Could not copy .env file.');
+end;
+
+// ---------------------------------------------------------------------------
 // InitializeSetup — called when the installer starts
 // ---------------------------------------------------------------------------
 function InitializeSetup: Boolean;
@@ -344,6 +381,9 @@ begin
     // 3. Clean up old shortcuts
     RemoveOldShortcuts;
     RemoveOldDesktopShortcut;
+
+    // 4. Copy .env file to user AppData
+    CopyEnvFile;
 
     Log('=== Post-Install Complete ===');
     Log('');

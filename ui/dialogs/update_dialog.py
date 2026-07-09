@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QDialog,
@@ -130,7 +130,8 @@ class UpdateDialog(QDialog):
 
     def _on_download(self) -> None:
         if self._result.release:
-            QDesktopServices.openUrl(self._result.release.html_url)
+            url = self._result.release.download_url or self._result.release.html_url
+            QDesktopServices.openUrl(QUrl(url))
         self.accept()
 
     def _on_ignore(self) -> None:

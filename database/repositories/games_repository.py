@@ -323,7 +323,7 @@ class GamesRepository:
     # Delete
     # ------------------------------------------------------------------
 
-    def delete(self, game_id: int) -> None:
+    def delete(self, game_id: int, commit: bool = True) -> None:
         """
         Delete a game by its primary key.
 
@@ -333,7 +333,8 @@ class GamesRepository:
         """
         cursor = self._conn.cursor()
         cursor.execute("DELETE FROM games WHERE id = ?;", (game_id,))
-        self._conn.commit()
+        if commit:
+            self._conn.commit()
         logger.info("Game deleted: id=%s", game_id)
 
     def count(self) -> int:

@@ -103,6 +103,20 @@ class TestSingleInstanceLock:
         if lock_file.exists():
             lock_file.unlink(missing_ok=True)
 
+    def test_double_acquisition_fails(self, env_cleanup):
+        os.environ["APP_ENV"] = "development"
+        si_mod = self._reload_si()
+        acquired1 = si_mod.acquire()
+        assert acquired1 is True
+        try:
+            acquired2 = si_mod.acquire()
+            assert acquired2 is False
+        finally:
+            si_mod.release()
+            lock_file = si_mod._LOCK_FILE
+            if lock_file.exists():
+                lock_file.unlink(missing_ok=True)
+
     def test_different_environments_can_coexist(self, env_cleanup):
         """Verify two different environments produce different lock names."""
         os.environ["APP_ENV"] = "production"
@@ -115,3 +129,44 @@ class TestSingleInstanceLock:
         dev_file = si_mod._LOCK_FILE
         assert prod_name != dev_name
         assert prod_file != dev_file
+
+    def test_activate_existing_instance_posix(self, env_cleanup):
+        import os
+        from unittest.mock import patch
+        si_mod = self._reload_si()
+        with patch("os.name", "posix"):
+            res = si_mod.activate_existing_instance()
+            assert res is False
+
+    @pytest.mark.skipif(os.name != "nt", reason="Windows specific test")
+    def test_activate_existing_instance_windows_finds_window(self, env_cleanup):
+        from unittest.mock import MagicMock, patch
+        si_mod = self._reload_si()
+        
+        mock_user32 = MagicMock()
+        mock_user32.FindWindowW.return_value = 12345
+        mock_user32.IsIconic.return_value = True
+        mock_user32.ShowWindow.return_value = True
+        mock_user32.SetForegroundWindow.return_value = True
+        mock_user32.AllowSetForegroundWindow.return_value = True
+        
+        with patch("ctypes.WinDLL", return_value=mock_user32):
+            res = si_mod.activate_existing_instance()
+            assert res is True
+            mock_user32.ShowWindow.assert_called_once_with(12345, 9)
+            mock_user32.SetForegroundWindow.assert_called_once_with(12345)
+            mock_user32.AllowSetForegroundWindow.assert_called_once_with(0xFFFFFFFF)
+
+    @pytest.mark.skipif(os.name != "nt", reason="Windows specific test")
+    def test_activate_existing_instance_windows_no_window(self, env_cleanup):
+        from unittest.mock import MagicMock, patch
+        si_mod = self._reload_si()
+        
+        mock_user32 = MagicMock()
+        mock_user32.FindWindowW.return_value = 0
+        mock_user32.EnumWindows.return_value = True
+        
+        with patch("ctypes.WinDLL", return_value=mock_user32):
+            res = si_mod.activate_existing_instance()
+            assert res is False
+

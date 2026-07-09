@@ -11,9 +11,11 @@ from __future__ import annotations
 import atexit
 import logging
 import os
+from pathlib import Path
 import sys
 
 from PyQt6.QtCore import QTimer
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from database.database_manager import DatabaseManager
@@ -27,11 +29,13 @@ from services.crash.crash_service import CrashService
 from services.crash.diagnostic_service import DiagnosticService
 from services.export_service import ExportService
 from services.game_service import GameService
+from services.delete_game_service import DeleteGameService
+from services.cache_cleanup_service import CacheCleanupService
 from services.logging_service import LoggingService
 from services.session_history_service import SessionHistoryService
 from services.startup_service import StartupService
 from services.support.report_queue_service import ReportQueueService
-from services.support.mongo_connection import MongoConnection
+from services.support.mongo_connection import MongoConnection, MongoValidationStatus
 from services.support.mongo_report_service import MongoReportService
 from services.support.support_service import SupportService
 from services.update_announcements_service import UpdateAnnouncementsService
@@ -57,6 +61,22 @@ from ui.main_window import MainWindow
 from ui.themes.theme_manager import ThemeManager
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Silent-startup flag (T-201)
+# ---------------------------------------------------------------------------
+
+_SILENT_FLAG = "--silent"
+
+
+def _parse_silent_flag() -> bool:
+    """Return True if ``--silent`` is present in sys.argv.
+
+    When Trackora is registered for OS auto-start via :class:`StartupService`
+    it is launched with this flag so the main window is suppressed and only
+    the tray icon is shown.  The user can restore the window via the tray.
+    """
+    return _SILENT_FLAG in sys.argv
 
 _EXPECTED_GAME_COLUMNS: frozenset[str] = frozenset({
     "platform", "platform_id", "is_auto_discovered",
@@ -111,6 +131,9 @@ def main() -> None:
 
     if not _acquire_lock():
         logger.warning("Another Trackora instance is already running.")
+        from trackora.core.single_instance import activate_existing_instance
+        if activate_existing_instance():
+            sys.exit(1)
         _app = QApplication(sys.argv)
         QMessageBox.warning(
             None, "Trackora",
@@ -124,6 +147,9 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("Trackora")
     app.setOrganizationName("Trackora")
+    _icon_path = Path(__file__).resolve().parent.parent / "ui" / "icons" / "app_icon.png"
+    if _icon_path.is_file():
+        app.setWindowIcon(QIcon(str(_icon_path)))
 
     ensure_dirs()
     db = DatabaseManager(str(DATABASE_PATH))
@@ -149,14 +175,7 @@ def main() -> None:
         sys.exit(2)
 
     crash_service = CrashService(diagnostic_service=DiagnosticService())
-    crash_result = crash_service.check_for_crash()
-    if crash_result.has_crashed:
-        logger.warning(
-            "Previous session crashed — report %s saved to %s",
-            crash_result.report.report_id if crash_result.report else "unknown",
-            crash_result.report_path,
-        )
-    crash_service.mark_startup()
+    was_crash = crash_service.state_manager.detect_crash()
 
     if compat.status == "first_run":
         schema_version_manager.write(app_version)
@@ -232,14 +251,31 @@ def main() -> None:
             )
     # ── End Upgrade Lifecycle ─────────────────────────────────────
 
+    tracking_state = TrackingState()
+
     games_repo = GamesRepository(conn)
     sessions_repo = SessionsRepository(conn)
     active_sessions_repo = ActiveSessionsRepository(conn)
     settings_repo = SettingsRepository(conn)
 
-    game_service = GameService(games_repo)
-    session_history_service = SessionHistoryService(sessions_repo, games_repo)
     statistics_service = StatisticsService(sessions_repo, games_repo)
+    cache_cleanup_service = CacheCleanupService()
+
+    delete_game_service = DeleteGameService(
+        games_repo=games_repo,
+        active_sessions_repo=active_sessions_repo,
+        sessions_repo=sessions_repo,
+        db_manager=db,
+        tracking_state=tracking_state,
+        statistics_service=statistics_service,
+        cache_cleanup_service=cache_cleanup_service,
+    )
+
+    game_service = GameService(
+        games_repository=games_repo,
+        delete_game_service=delete_game_service,
+    )
+    session_history_service = SessionHistoryService(sessions_repo, games_repo)
     PlaytimeCalculator(sessions_repo, games_repo)
     export_service = ExportService(sessions_repo, games_repo, settings_repo)
 
@@ -249,13 +285,22 @@ def main() -> None:
     mongo = MongoConnection(
         database_name=os.environ.get("MONGODB_DATABASE"),
     )
-    if mongo.health_check():
-        logger.info("MongoDB reporting: connected")
-    else:
-        logger.warning(
-            "MongoDB reporting: not available — "
-            "reports will be queued offline."
-        )
+    def on_startup_validation(status: MongoValidationStatus) -> None:
+        if status == MongoValidationStatus.CONNECTED:
+            logger.info("MongoDB reporting: connected")
+        else:
+            logger.warning(
+                "MongoDB reporting: not available — "
+                "reports will be queued offline. Status: %s",
+                status.value
+            )
+        try:
+            if health_monitor is not None:
+                health_monitor.run_checks()
+        except (NameError, UnboundLocalError):
+            pass
+
+    mongo.validate_async(on_startup_validation)
     report_service = MongoReportService(connection=mongo)
     queue_service = ReportQueueService()
     announcements_service = UpdateAnnouncementsService(
@@ -270,7 +315,6 @@ def main() -> None:
         announcements_service=announcements_service,
     )
 
-    tracking_state = TrackingState()
     session_manager = SessionManager(
         state=tracking_state,
         active_sessions_repo=active_sessions_repo,
@@ -286,11 +330,48 @@ def main() -> None:
         session_manager=session_manager,
     )
 
-    result = recovery.recover()
+    result = recovery.recover(was_crash=was_crash)
     if result.recovered_sessions:
         logger.info("Recovered %d orphaned session(s)", len(result.recovered_sessions))
     if result.discarded_count:
         logger.info("Discarded %d invalid session(s)", result.discarded_count)
+
+    active_sessions_data = []
+    if was_crash:
+        for s in result.recovered_sessions + result.discarded_sessions:
+            game_name = "Unknown Game"
+            try:
+                game = games_repo.get_by_id(s.game_id)
+                if game:
+                    game_name = game.name
+            except Exception:
+                pass
+            active_sessions_data.append({
+                "game_id": s.game_id,
+                "game_name": game_name,
+                "process_id": s.process_id,
+                "was_recovered": s.was_saved,
+                "duration_seconds": s.duration_seconds,
+                "discard_reason": s.discard_reason,
+            })
+
+    try:
+        tracked_count = len(games_repo.get_all_games())
+    except Exception:
+        tracked_count = 0
+
+    crash_result = crash_service.check_for_crash(
+        active_sessions=active_sessions_data,
+        tracked_games=tracked_count,
+        was_tracking=len(active_sessions_data) > 0,
+    )
+    if crash_result.has_crashed:
+        logger.warning(
+            "Previous session crashed — report %s saved to %s",
+            crash_result.report.report_id if crash_result.report else "unknown",
+            crash_result.report_path,
+        )
+    crash_service.mark_startup()
 
     theme_manager = ThemeManager()
 
@@ -306,6 +387,8 @@ def main() -> None:
         tracking_state=tracking_state,
         support_service=support_service,
         report_service=report_service,
+        crash_service=crash_service,
+        crash_result=crash_result,
     )
 
     def reload_tracked_games() -> None:
@@ -329,8 +412,84 @@ def main() -> None:
 
     theme_manager.apply_theme(app, theme_manager.current_theme)
 
+    # ── T-204: Background Health Monitor Setup ──
+    from services.health.health_registry import HealthRegistry
+    from services.health.health_check import (
+        TrackingEngineHealthCheck,
+        SQLiteHealthCheck,
+        MongoDBHealthCheck,
+        UpdateServiceHealthCheck,
+        CrashServiceHealthCheck,
+        BackgroundWorkersHealthCheck,
+    )
+    from services.health.health_monitor import HealthMonitor
+
+    health_registry = HealthRegistry()
+    health_registry.register(TrackingEngineHealthCheck(process_monitor, tracking_state))
+    health_registry.register(SQLiteHealthCheck(conn))
+    health_registry.register(MongoDBHealthCheck(mongo))
+    health_registry.register(UpdateServiceHealthCheck(window._update_service, window))
+    health_registry.register(CrashServiceHealthCheck(crash_service, recovery))
+    health_registry.register(BackgroundWorkersHealthCheck(window))
+
+    health_monitor = HealthMonitor(health_registry)
+    health_monitor.notification_requested.connect(
+        lambda title, msg: window._tray.show_notification(title, msg)
+    )
+    health_monitor.start(30000)  # Check every 30 seconds
+    window._health_monitor = health_monitor
+    # ── End T-204 ──
+
+    # ── T-205: Database Backup Manager Setup ──
+    from services.backup.backup_manager import BackupManager as ServiceBackupManager
+    from services.backup.backup_service import BackupService
+    from services.backup.backup_scheduler import BackupScheduler
+
+    backup_manager = ServiceBackupManager(
+        schema_version_manager=schema_version_manager,
+    )
+    backup_service = BackupService(backup_manager)
+    backup_scheduler = BackupScheduler(
+        backup_manager=backup_manager,
+        settings_repo=settings_repo,
+        parent=window,
+    )
+    backup_scheduler.start(60000)  # Evaluate schedule policy every 60 seconds
+    window._backup_service = backup_service
+    window._backup_scheduler = backup_scheduler
+    # ── End T-205 ──
+
+    # ── T-206: Database Restore Manager Setup ──
+    from services.backup.restore_manager import RestoreManager
+    from services.backup.restore_service import RestoreService
+
+    restore_manager = RestoreManager(
+        backup_manager=backup_manager,
+        db_path=DATABASE_PATH,
+        repositories=[games_repo, sessions_repo, active_sessions_repo, settings_repo],
+        schema_version_manager=schema_version_manager,
+        process_monitor=process_monitor,
+        health_monitor=health_monitor,
+        backup_scheduler=backup_scheduler,
+        main_window=window,
+    )
+    restore_service = RestoreService(restore_manager)
+    window._restore_service = restore_service
+    # ── End T-206 ──
+
     process_monitor.start()
-    window.show()
+
+    # ── T-201: Silent Startup ─────────────────────────────────────────
+    # When launched by the OS on login (via StartupService) the --silent flag
+    # suppresses window.show() so Trackora starts hidden in the system tray.
+    start_minimized = _parse_silent_flag()
+    if start_minimized:
+        logger.info(
+            "Silent startup active — main window suppressed; tray icon only."
+        )
+    else:
+        window.show()
+    # ── End T-201 ────────────────────────────────────────────────────
 
     atexit.register(crash_service.mark_clean_shutdown)
     logger.info("Trackora started — database: %s", DATABASE_PATH)

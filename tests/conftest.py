@@ -37,6 +37,7 @@ class FakeActiveSessionsRepo:
             "game_id": active_session.game_id,
             "process_id": active_session.process_id,
             "start_time": active_session.start_time,
+            "created_at": active_session.created_at,
         }
         active_session.id = row_id
         return active_session
@@ -52,8 +53,13 @@ class FakeActiveSessionsRepo:
                 game_id=row["game_id"],
                 process_id=row["process_id"],
                 start_time=row["start_time"],
+                created_at=row.get("created_at") or row["start_time"],
             ))
         return result
+
+    def update_heartbeat(self, active_session_id: int, heartbeat: datetime) -> None:
+        if active_session_id in self._rows:
+            self._rows[active_session_id]["created_at"] = heartbeat
 
     # Test helpers
     def count(self) -> int:

@@ -26,8 +26,7 @@ from PyQt6.QtWidgets import (
 )
 
 from services.crash.diagnostic_service import CrashReport, DiagnosticService
-from services.support.reporting_interface import AbstractReportService, ReportType
-from services.support.report_queue_service import ReportQueueService
+from services.support.support_service import SupportService
 
 logger = logging.getLogger(__name__)
 
@@ -47,19 +46,17 @@ class CrashDialog(QDialog):
         self,
         report: CrashReport,
         report_path: Path,
-        github_service: AbstractReportService | None = None,
-        queue_service: ReportQueueService | None = None,
+        support_service: SupportService | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._report = report
         self._report_path = report_path
-        self._github_service = github_service
-        self._queue_service = queue_service
+        self._support_service = support_service
         self._issue_url: str | None = None
         self._action_taken: str | None = None
 
-        self.setWindowTitle("Trackora — Unexpected Shutdown")
+        self.setWindowTitle("Unexpected Shutdown")
         self.setMinimumSize(520, 320)
         self.setModal(True)
         self._setup_ui()
@@ -135,7 +132,7 @@ class CrashDialog(QDialog):
     # ------------------------------------------------------------------
 
     def _on_send(self) -> None:
-        if self._github_service is None:
+        if self._support_service is None:
             self._status_label.setText(
                 "Unable to submit report right now. "
                 "Use Review Report to view the details manually."
@@ -145,29 +142,23 @@ class CrashDialog(QDialog):
         self._set_buttons_enabled(False)
         self._status_label.setText("Submitting crash report...")
 
-        title = f"Trackora Crash — {self._report.crash_type} ({self._report.timestamp})"
-        body = self._build_issue_body(self._report)
-
         try:
-            result = self._github_service.submit_report(
-                ReportType.CRASH, title, body
-            )
-            if result.success:
-                self._issue_url = result.issue_url
+            result = self._support_service.submit_crash_report(self._report)
+            if result.github_success:
+                self._issue_url = result.github_url
                 self._action_taken = self.ACTION_SEND
                 self._status_label.setText(
                     f"Crash report submitted: "
-                    f'<a href="{result.issue_url}">{result.issue_url}</a>'
+                    f'<a href="{result.github_url}">{result.github_url}</a>'
                 )
                 self._delete_report_file()
-            elif self._is_retryable(result.error_message) and self._queue_service is not None:
-                self._queue_crash_report()
+            elif result.queued:
                 self._status_label.setText(
                     "Report saved locally and will be sent automatically."
                 )
             else:
                 self._status_label.setText(
-                    f"Failed to submit: {result.error_message}"
+                    f"Failed to submit: {result.github_error}"
                 )
         except Exception as exc:
             logger.exception("Crash report submission error")
@@ -192,40 +183,6 @@ class CrashDialog(QDialog):
     # Internal
     # ------------------------------------------------------------------
 
-    def _queue_crash_report(self) -> None:
-        data = self._build_queue_data()
-        try:
-            self._queue_service.save_report("crash", data)
-            logger.info("Crash report queued for retry: %s", self._report.report_id)
-        except Exception as exc:
-            logger.exception("Failed to queue crash report: %s", exc)
-
-    def _build_queue_data(self) -> dict:
-        return {
-            "report_id": self._report.report_id,
-            "timestamp": self._report.timestamp,
-            "app_version": self._report.app_version,
-            "os_version": self._report.os_version,
-            "os_platform": self._report.os_platform,
-            "active_sessions": self._report.active_sessions,
-            "tracked_games": self._report.tracked_games,
-            "stack_trace": self._report.stack_trace,
-            "recent_log_entries": self._report.recent_log_entries,
-            "crash_type": self._report.crash_type,
-            "was_tracking": self._report.was_tracking,
-            "title": f"Trackora Crash — {self._report.crash_type} ({self._report.timestamp})",
-            "body": self._build_issue_body(self._report),
-        }
-
-    @staticmethod
-    def _is_retryable(error_message: str | None) -> bool:
-        if error_message is None:
-            return False
-        lower = error_message.lower()
-        return not any(kw in lower for kw in [
-            "not configured", "authentication failed", "not found", "check your",
-        ])
-
     def _delete_report_file(self) -> None:
         try:
             if self._report_path.is_file():
@@ -237,31 +194,3 @@ class CrashDialog(QDialog):
     def _set_buttons_enabled(self, enabled: bool) -> None:
         for btn in self.findChildren(QPushButton):
             btn.setEnabled(enabled)
-
-    @staticmethod
-    def _build_issue_body(report: CrashReport) -> str:
-        lines = [
-            f"### Application Version\n{report.app_version}",
-            f"### OS\n{report.os_platform} ({report.os_version})",
-            f"### Timestamp\n{report.timestamp}",
-            f"### Crash Type\n{report.crash_type}",
-            f"### Was Tracking\n{report.was_tracking}",
-            f"### Tracked Games\n{report.tracked_games}",
-            "### Active Sessions",
-        ]
-        if report.active_sessions:
-            for s in report.active_sessions:
-                lines.append(f"- Game ID {s.get('game_id', '?')}: {s.get('game_name', '?')}")
-        else:
-            lines.append("*None*")
-
-        if report.stack_trace:
-            lines.append("\n### Stack Trace\n```\n" + report.stack_trace + "\n```")
-
-        if report.recent_log_entries:
-            lines.append("\n### Recent Log Entries\n```\n")
-            lines.extend(report.recent_log_entries[-30:])
-            lines.append("```")
-
-        lines.append("\n---\n*Generated automatically by Trackora*")
-        return "\n".join(lines)

@@ -109,8 +109,8 @@ class GamesView(QWidget):
         )
         header_layout.addWidget(self._add_btn)
 
-        # Scan For Games button
-        self._scan_btn = QPushButton("Scan For Games")
+        # Scan for Games button
+        self._scan_btn = QPushButton("Scan for Games")
         self._scan_btn.setFixedHeight(32)
         self._scan_btn.setToolTip("Scan installed launchers for games")
         self._scan_btn.setStyleSheet(
@@ -128,20 +128,18 @@ class GamesView(QWidget):
         sub_toolbar.setSpacing(8)
 
         self._edit_btn = QPushButton("Edit")
-        self._edit_btn.setFixedHeight(28)
+        self._edit_btn.setFixedHeight(32)
         self._edit_btn.setToolTip("Edit selected game")
         self._edit_btn.setEnabled(False)
 
         self._delete_btn = QPushButton("Delete")
-        self._delete_btn.setFixedHeight(28)
+        self._delete_btn.setObjectName("DeleteButton")
+        self._delete_btn.setFixedHeight(32)
         self._delete_btn.setToolTip("Delete selected game")
         self._delete_btn.setEnabled(False)
-        self._delete_btn.setStyleSheet(
-            "QPushButton:enabled { color: #F44336; }"
-        )
 
         self._toggle_btn = QPushButton("Disable Tracking")
-        self._toggle_btn.setFixedHeight(28)
+        self._toggle_btn.setFixedHeight(32)
         self._toggle_btn.setToolTip("Enable or disable tracking for selected game")
         self._toggle_btn.setEnabled(False)
 

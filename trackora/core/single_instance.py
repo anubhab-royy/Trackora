@@ -50,7 +50,11 @@ def _acquire_windows() -> bool:
     global _windows_mutex_handle
     try:
         import ctypes
-        kernel32 = ctypes.windll.kernel32
+        from ctypes import wintypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateMutexW.argtypes = [wintypes.LPCVOID, wintypes.BOOL, wintypes.LPCWSTR]
+        kernel32.CreateMutexW.restype = wintypes.HANDLE
+        
         mutex_name = f"Global\\{_LOCK_NAME}"
         handle = kernel32.CreateMutexW(None, True, mutex_name)
         err = ctypes.get_last_error()
@@ -64,7 +68,7 @@ def _acquire_windows() -> bool:
         return False
     except Exception as exc:
         logger.warning("Failed to acquire single-instance mutex: %s", exc)
-        return True
+        return False
 
 
 def _release_windows() -> None:
@@ -72,7 +76,8 @@ def _release_windows() -> None:
     if _windows_mutex_handle is not None:
         try:
             import ctypes
-            ctypes.windll.kernel32.CloseHandle(_windows_mutex_handle)
+            kernel32 = ctypes.WinDLL("kernel32")
+            kernel32.CloseHandle(_windows_mutex_handle)
         except Exception:
             pass
         _windows_mutex_handle = None
@@ -123,3 +128,89 @@ def _release_posix() -> None:
         except Exception:
             pass
         _acquire_posix.fd = None  # type: ignore[attr-defined]
+
+
+def activate_existing_instance() -> bool:
+    """Finds the existing window of Trackora and activates it.
+    
+    Restores the window if it was minimized, and brings it to foreground.
+    """
+    if os.name == "nt":
+        return _activate_windows_window()
+    return False
+
+
+def _activate_windows_window() -> bool:
+    try:
+        import ctypes
+        from ctypes import wintypes
+        
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        
+        # Define argtypes and restype
+        user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
+        user32.FindWindowW.restype = wintypes.HWND
+        
+        user32.IsIconic.argtypes = [wintypes.HWND]
+        user32.IsIconic.restype = wintypes.BOOL
+        
+        user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+        user32.ShowWindow.restype = wintypes.BOOL
+        
+        user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+        user32.SetForegroundWindow.restype = wintypes.BOOL
+        
+        user32.AllowSetForegroundWindow.argtypes = [wintypes.DWORD]
+        user32.AllowSetForegroundWindow.restype = wintypes.BOOL
+        
+        from trackora.core.environment import Environment, CURRENT_ENVIRONMENT
+        target_title = "Trackora [DEV]" if CURRENT_ENVIRONMENT == Environment.DEVELOPMENT else "Trackora"
+        
+        # 1. Try FindWindowW
+        hwnd = user32.FindWindowW(None, target_title)
+        
+        # 2. Try EnumWindows as fallback
+        if not hwnd:
+            found: list[wintypes.HWND] = []
+            
+            WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+            
+            user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+            user32.GetWindowTextLengthW.restype = ctypes.c_int
+            
+            user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+            user32.GetWindowTextW.restype = ctypes.c_int
+            
+            def enum_cb(h, l):
+                length = user32.GetWindowTextLengthW(h)
+                if length > 0:
+                    buf = ctypes.create_unicode_buffer(length + 1)
+                    user32.GetWindowTextW(h, buf, length + 1)
+                    if buf.value == target_title:
+                        found.append(h)
+                        return False  # Stop enumeration
+                return True
+                
+            user32.EnumWindows(WNDENUMPROC(enum_cb), 0)
+            if found:
+                hwnd = found[0]
+                
+        if hwnd:
+            # Allow the target window to take foreground (ASFW_ANY = -1)
+            user32.AllowSetForegroundWindow(0xFFFFFFFF)  # -1 as DWORD is 0xFFFFFFFF
+            
+            # Restore if minimized (SW_RESTORE = 9)
+            if user32.IsIconic(hwnd):
+                user32.ShowWindow(hwnd, 9)
+            else:
+                user32.ShowWindow(hwnd, 5)  # SW_SHOW
+                
+            # Bring to foreground & focus
+            user32.SetForegroundWindow(hwnd)
+            return True
+            
+        return False
+    except Exception as exc:
+        logger.warning("Failed to activate existing window: %s", exc)
+        return False
+

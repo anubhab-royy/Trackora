@@ -60,7 +60,7 @@ class DashboardController:
         self._service = statistics_service
         self._active_repo = active_sessions_repo
         self._games_repo = games_repo
-        logger.info("DashboardController initialised.")
+        logger.debug("DashboardController initialised.")
 
     def load_dashboard_data(self) -> DashboardData:
         """

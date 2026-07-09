@@ -144,6 +144,15 @@ class ActiveSessionsRepository:
         row = cursor.fetchone()
         return row[0] if row else 0
 
+    def update_heartbeat(self, active_session_id: int, heartbeat: datetime) -> None:
+        """Update the created_at timestamp to act as a heartbeat for recovery."""
+        cursor = self._conn.cursor()
+        cursor.execute(
+            "UPDATE active_sessions SET created_at = ? WHERE id = ?;",
+            (_dt_str(heartbeat), active_session_id)
+        )
+        self._conn.commit()
+
     # ------------------------------------------------------------------
     # Delete
     # ------------------------------------------------------------------
@@ -191,4 +200,14 @@ class ActiveSessionsRepository:
         self._conn.commit()
         deleted = cursor.rowcount
         logger.info("Cleared %s orphaned active sessions.", deleted)
+        return deleted
+
+    def delete_all_for_game(self, game_id: int, commit: bool = True) -> int:
+        """Delete all active sessions for a specific game. Does not commit if commit=False."""
+        cursor = self._conn.cursor()
+        cursor.execute("DELETE FROM active_sessions WHERE game_id = ?;", (game_id,))
+        if commit:
+            self._conn.commit()
+        deleted = cursor.rowcount
+        logger.info("Deleted %d active sessions for game_id=%d", deleted, game_id)
         return deleted

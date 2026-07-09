@@ -9,10 +9,15 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
-from typing import Optional
+from collections.abc import Callable
+from typing import Optional, TYPE_CHECKING
 
 from database.models import Game
 from database.repositories.games_repository import GamesRepository
+from services.delete_game_result import DeleteGameResult
+
+if TYPE_CHECKING:
+    from services.delete_game_service import DeleteGameService
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +65,13 @@ class GameService:
     - All persistence delegated to GamesRepository
     """
 
-    def __init__(self, games_repository: GamesRepository) -> None:
+    def __init__(
+        self,
+        games_repository: GamesRepository,
+        delete_game_service: Optional[DeleteGameService] = None,
+    ) -> None:
         self._repo = games_repository
+        self._delete_game_service = delete_game_service
 
     # ------------------------------------------------------------------
     # Public API
@@ -193,8 +203,12 @@ class GameService:
                 success=False, message="Failed to update game. Please try again."
             )
 
-    def delete_game(self, game_id: int) -> GameServiceResult:
+    def delete_game(self, game_id: int) -> DeleteGameResult | GameServiceResult:
         """Delete a game by id."""
+        if self._delete_game_service is not None:
+            return self._delete_game_service.delete_game(game_id)
+
+        # Fallback to basic repository delete (for backwards compatibility & testing)
         game = self._repo.get_by_id(game_id)
         if game is None:
             return GameServiceResult(success=False, message="Game not found.")

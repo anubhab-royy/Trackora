@@ -39,7 +39,7 @@ from database.repositories import (
     GamesRepository,
     SettingsRepository,
 )
-from services.crash.crash_service import CrashService
+from services.crash.crash_service import CrashResult, CrashService
 from services.crash.diagnostic_service import DiagnosticService
 from services.export_service import ExportService
 from services.game_service import GameService
@@ -51,6 +51,7 @@ from services.support.support_service import SupportService
 from services.tray_service import TrayService
 from services.update_announcements_service import UpdateAnnouncementsService
 from services.update_center_service import UpdateCenterService
+from services.update_checker_thread import UpdateCheckerThread
 from tracker.tracking_state import TrackingState
 from trackora.core.build_info import BUILD_CHANNEL
 from trackora.core.environment import Environment
@@ -99,6 +100,8 @@ class MainWindow(QMainWindow):
         support_service: SupportService | None = None,
         tracking_state: TrackingState | None = None,
         report_service: AbstractReportService | None = None,
+        crash_service: CrashService | None = None,
+        crash_result: CrashResult | None = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -113,21 +116,25 @@ class MainWindow(QMainWindow):
         self._tracking_state = tracking_state
 
         self._diagnostic_service = DiagnosticService()
-        self._crash_service = CrashService(self._diagnostic_service)
+        self._crash_service = crash_service or CrashService(self._diagnostic_service)
         self._report_service: AbstractReportService = (
             report_service or GitHubIssueService(self._settings_repo)
+        )
+        self._queue_service = (
+            support_service._queue_service if support_service is not None
+            else ReportQueueService()
         )
         self._announcements_service = UpdateAnnouncementsService(
             remote_url=self._get_announcements_url(),
         )
         self._support_service = support_service or SupportService(
             github_service=self._report_service,
-            queue_service=ReportQueueService(),
+            queue_service=self._queue_service,
             announcements_service=self._announcements_service,
         )
 
-        self._check_for_crashes()
-        self._crash_service.mark_startup()
+        if crash_result is not None and crash_result.has_crashed:
+            self._show_crash_dialog(crash_result)
 
         self._process_report_queue()
         self._queue_retry_timer = QTimer()
@@ -145,8 +152,9 @@ class MainWindow(QMainWindow):
         self._setup_tray()
         self._setup_auto_refresh()
 
-        # Non-blocking startup update check
-        QTimer.singleShot(5000, self._perform_startup_update_check)
+        # Non-blocking startup update check (T-202: off-thread)
+        self._update_thread: UpdateCheckerThread | None = None
+        QTimer.singleShot(5000, self._start_background_update_check)
 
         # Ensure clean shutdown even on OS shutdown
         app = QApplication.instance()
@@ -208,6 +216,9 @@ class MainWindow(QMainWindow):
         root.addWidget(content_frame, stretch=1)
 
     def _build_views(self) -> None:
+        # Register statistics refresh callback to automatically reload UI widgets (T-222)
+        self._statistics_service.register_refresh_callback(self._refresh_current_view)
+
         self._dash_ctrl = DashboardController(
             self._statistics_service, self._active_repo, self._games_repo
         )
@@ -241,7 +252,7 @@ class MainWindow(QMainWindow):
 
         self._update_service = UpdateCenterService(
             settings_repo=self._settings_repo,
-            repo="anomalyco/trackora",
+            repo="anubhab-royy/Trackora",
         )
 
         self._settings_view = SettingsView(self)
@@ -349,12 +360,26 @@ class MainWindow(QMainWindow):
         if app is not None:
             app.quit()
 
-    def _perform_startup_update_check(self) -> None:
-        """Check for updates at startup, non-blocking."""
+    def _start_background_update_check(self) -> None:
+        """Kick off a background update check that won't block the UI thread.
+
+        T-202: the network call runs inside UpdateCheckerThread.run() on a
+        worker thread.  Results are delivered via Qt signals.
+        """
         if not self._settings_repo.get_bool("update_auto_check_enabled", default=True):
             return
+        self._update_thread = UpdateCheckerThread(self._update_service)
+        self._update_thread.check_completed.connect(self._on_update_check_result)
+        self._update_thread.check_failed.connect(self._on_update_check_error)
+        self._update_thread.start()
+        logger.debug("Background update check started.")
+
+    def _on_update_check_result(self, result: object) -> None:
+        """Handle the result emitted by UpdateCheckerThread (UI thread)."""
+        from services.update_center_service import UpdateCheckResult
+        if not isinstance(result, UpdateCheckResult):
+            return
         try:
-            result = self._update_service.check_for_updates()
             if result.update_available and self._update_service.is_update_available():
                 assert result.release is not None
                 self._update_banner.show(
@@ -365,7 +390,11 @@ class MainWindow(QMainWindow):
                     f"Trackora {result.release.version} is ready to download",
                 )
         except Exception as exc:
-            logger.warning("Startup update check failed: %s", exc)
+            logger.warning("Startup update check result handling failed: %s", exc)
+
+    def _on_update_check_error(self, error: str) -> None:
+        """Log a background check failure without showing UI dialogs."""
+        logger.warning("Background update check failed: %s", error)
 
     def _on_update_banner_ignored(self, version: str) -> None:
         self._update_service.ignore_version(version)
@@ -464,40 +493,18 @@ class MainWindow(QMainWindow):
     # Crash detection
     # ------------------------------------------------------------------
 
-    def _check_for_crashes(self) -> None:
-        """Check if the previous session crashed and prompt the user."""
+    def _show_crash_dialog(self, result: CrashResult) -> None:
+        """Prompt the user with the crash report dialog."""
         try:
-            active: list[dict[str, Any]] = []
-            tracked = 0
-            was_tracking = False
-            if self._tracking_state is not None:
-                for session in self._tracking_state.active_sessions.values():
-                    active.append({
-                        "game_id": session.game_id,
-                        "game_name": session.game_name,
-                        "process_id": session.process_id,
-                    })
-                tracked = len(self._tracking_state.tracked_games)
-                was_tracking = self._tracking_state.is_running
-
-            result = self._crash_service.check_for_crash(
-                active_sessions=active,
-                tracked_games=tracked,
-                was_tracking=was_tracking,
-            )
-            if not result.has_crashed:
-                return
-
             dialog = CrashDialog(
                 report=result.report,
                 report_path=result.report_path,
-                github_service=self._report_service,
-                queue_service=self._queue_service,
+                support_service=self._support_service,
                 parent=self,
             )
             dialog.exec()
         except Exception as exc:
-            logger.error("Crash check failed: %s", exc)
+            logger.error("Failed to display crash dialog: %s", exc)
 
     # ------------------------------------------------------------------
     # Announcements URL

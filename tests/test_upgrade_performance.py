@@ -433,17 +433,9 @@ class TestHistoryLoad:
         vals = _measure(_run, BENCH_ITERATIONS)
         _record("history.filtered_by_date", vals, NFR_HISTORY_DEBOUNCE_MS)
 
-    def test_history_filtered_by_duration(self, perf_history_service: SessionHistoryService) -> None:
-        def _run() -> None:
-            perf_history_service.query(SessionHistoryQuery(
-                page=0, page_size=NFR_HISTORY_PAGE_SIZE,
-                min_duration_minutes=30, max_duration_minutes=120,
-            ))
-        vals = _measure(_run, BENCH_ITERATIONS)
-        _record("history.filtered_by_duration", vals, NFR_HISTORY_DEBOUNCE_MS)
 
     def test_history_complex_filter(self, perf_history_service: SessionHistoryService) -> None:
-        """Full-text search + game + date range + duration + sort."""
+        """Full-text search + game + date range + sort."""
         today = date.today()
         start = today - timedelta(days=30)
 
@@ -453,7 +445,6 @@ class TestHistoryLoad:
                 search_text="Game_0",
                 game_id=1,
                 date_from=start, date_to=today,
-                min_duration_minutes=10, max_duration_minutes=180,
                 sort_by="duration", sort_order="desc",
             ))
         vals = _measure(_run, BENCH_ITERATIONS)

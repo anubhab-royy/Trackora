@@ -9,14 +9,16 @@ from __future__ import annotations
 
 import logging
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -42,8 +44,10 @@ class SettingsView(QWidget):
 
     theme_toggled = pyqtSignal(bool)
     startup_toggled = pyqtSignal(bool)
+    auto_check_toggled = pyqtSignal(bool)
     export_csv_requested = pyqtSignal()
     export_json_requested = pyqtSignal()
+    restore_requested = pyqtSignal()
     check_updates_requested = pyqtSignal()
     view_release_notes_requested = pyqtSignal()
 
@@ -56,6 +60,14 @@ class SettingsView(QWidget):
 
     def set_start_with_windows(self, enabled: bool) -> None:
         self._startup_check.setChecked(enabled)
+
+    def set_auto_check(self, enabled: bool) -> None:
+        """Set the 'Automatically check for updates' checkbox state."""
+        self._auto_check_checkbox.setChecked(enabled)
+
+    def set_latest_version(self, version: str) -> None:
+        """Update the 'Latest Version:' label (T-202)."""
+        self._latest_version_label.setText(version)
 
     def set_last_checked(self, iso_timestamp: str) -> None:
         self._last_checked_label.setText(iso_timestamp)
@@ -95,45 +107,92 @@ class SettingsView(QWidget):
 
     def _build_about_group(self) -> QGroupBox:
         group = QGroupBox("About")
-        layout = QFormLayout(group)
-        layout.setSpacing(8)
+        group_layout = QVBoxLayout(group)
+        group_layout.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        group_layout.addWidget(scroll)
+
+        content = QWidget()
+        scroll.setWidget(content)
+        root = QVBoxLayout(content)
+        root.setSpacing(8)
+
+        # ── Info rows (QFormLayout — labels on left, values on right) ──
+        info_form = QFormLayout()
+        info_form.setContentsMargins(0, 0, 0, 0)
+        info_form.setSpacing(6)
+        root.addLayout(info_form)
 
         channel_label = QLabel({
             "production": "Production",
             "development": "Development",
         }.get(BUILD_CHANNEL, BUILD_CHANNEL))
         channel_label.setTextInteractionFlags(channel_label.textInteractionFlags())
-        layout.addRow("Build Channel:", channel_label)
+        info_form.addRow("Build Channel:", channel_label)
 
         version_label = QLabel(BUILD_VERSION)
         version_label.setTextInteractionFlags(version_label.textInteractionFlags())
-        layout.addRow("Version:", version_label)
+        info_form.addRow("Version:", version_label)
+
+        # T-202: Latest Version row — populated after background check
+        self._latest_version_label = QLabel("—")
+        self._latest_version_label.setObjectName("LatestVersionLabel")
+        self._latest_version_label.setTextInteractionFlags(
+            self._latest_version_label.textInteractionFlags()
+        )
+        info_form.addRow("Latest Version:", self._latest_version_label)
 
         data_label = QLabel(str(BASE_DIR))
         data_label.setWordWrap(True)
         data_label.setTextInteractionFlags(data_label.textInteractionFlags())
-        layout.addRow("Data Directory:", data_label)
+        info_form.addRow("Data Directory:", data_label)
 
+        # ── Update controls (decoupled from QFormLayout field column) ──
+        self._auto_check_checkbox = QCheckBox("Automatically check for updates")
+        self._auto_check_checkbox.setObjectName("AutoCheckCheckbox")
+        self._auto_check_checkbox.setChecked(True)
+        self._auto_check_checkbox.toggled.connect(self.auto_check_toggled.emit)
+        root.addWidget(self._auto_check_checkbox)
+
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 0, 0, 0)
+        btn_row.addStretch()
         self._check_updates_btn = QPushButton("Check for Updates")
         self._check_updates_btn.setObjectName("CheckUpdatesButton")
+        self._check_updates_btn.setFixedWidth(180)
         self._check_updates_btn.clicked.connect(self.check_updates_requested.emit)
-        layout.addRow("", self._check_updates_btn)
+        btn_row.addWidget(self._check_updates_btn)
+        btn_row.addStretch()
+        root.addLayout(btn_row)
+
+        # ── Status rows (QFormLayout) ──
+        status_form = QFormLayout()
+        status_form.setContentsMargins(0, 0, 0, 0)
+        status_form.setSpacing(6)
+        root.addLayout(status_form)
 
         self._last_checked_label = QLabel("")
         self._last_checked_label.setTextInteractionFlags(
             self._last_checked_label.textInteractionFlags()
         )
-        layout.addRow("Last checked:", self._last_checked_label)
+        status_form.addRow("Last checked:", self._last_checked_label)
 
         self._update_status_label = QLabel("")
         self._update_status_label.setWordWrap(True)
-        layout.addRow("", self._update_status_label)
+        status_form.addRow("", self._update_status_label)
 
         self._view_notes_btn = QPushButton("View Release Notes")
         self._view_notes_btn.setObjectName("SecondaryButton")
+        self._view_notes_btn.setFixedWidth(180)
         self._view_notes_btn.clicked.connect(self.view_release_notes_requested.emit)
         self._view_notes_btn.hide()
-        layout.addRow("", self._view_notes_btn)
+        status_form.addRow("", self._view_notes_btn)
 
         return group
 
@@ -162,5 +221,10 @@ class SettingsView(QWidget):
         json_btn.setObjectName("SecondaryButton")
         json_btn.clicked.connect(self.export_json_requested.emit)
         layout.addWidget(json_btn)
+
+        restore_btn = QPushButton("Restore from Backup...")
+        restore_btn.setObjectName("SecondaryButton")
+        restore_btn.clicked.connect(self.restore_requested.emit)
+        layout.addWidget(restore_btn)
 
         return group
